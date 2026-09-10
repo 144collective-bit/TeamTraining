@@ -1,7 +1,6 @@
-import { db, schema } from "@/db";
+import { schema, type Tx } from "@/db";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { sha256, canonicalJson } from "./crypto";
-import type { PgTransaction } from "drizzle-orm/pg-core";
 
 export type EventInput = {
   tenantId: string;
@@ -14,8 +13,6 @@ export type EventInput = {
   occurredAt?: Date;
   deviceId?: string | null;
 };
-
-type Db = typeof db | PgTransaction<any, typeof schema, any>;
 
 /**
  * Append one event to the log, chaining its hash to the previous event in the
@@ -35,7 +32,7 @@ type Db = typeof db | PgTransaction<any, typeof schema, any>;
  * that stream only — writes to every other stream proceed in parallel — and
  * releases automatically on commit or rollback.
  */
-export async function appendEvent(tx: Db, input: EventInput) {
+export async function appendEvent(tx: Tx, input: EventInput) {
   await tx.execute(
     sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.streamId}::text, 0))`,
   );
@@ -95,8 +92,8 @@ export type VerifyResult = {
  * Walk a stream's hash chain and confirm nothing has been altered.
  * This is what turns "trust our database" into a demonstrable claim.
  */
-export async function verifyStream(streamId: string): Promise<VerifyResult> {
-  const rows = await db
+export async function verifyStream(tx: Tx, streamId: string): Promise<VerifyResult> {
+  const rows = await tx
     .select()
     .from(schema.events)
     .where(eq(schema.events.streamId, streamId))
@@ -132,8 +129,8 @@ export async function verifyStream(streamId: string): Promise<VerifyResult> {
 }
 
 /** Full history for a stream, oldest first. */
-export async function streamHistory(streamId: string) {
-  return db
+export async function streamHistory(tx: Tx, streamId: string) {
+  return tx
     .select({
       id: schema.events.id,
       seq: schema.events.seq,

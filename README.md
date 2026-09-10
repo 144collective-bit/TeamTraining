@@ -25,12 +25,19 @@ Requires Node 22+ and Postgres 16+.
 
 ```bash
 npm install
-cp .env.example .env          # set DATABASE_URL and SESSION_SECRET
-npm run db:push               # create the schema
-psql "$DATABASE_URL" -f drizzle/guards.sql   # append-only + immutability triggers
-npm run db:seed               # load the Protektor working example
+cp .env.example .env          # see the note on the two database URLs below
+npm run db:setup              # schema, triggers, RLS policies, seed data
 npm run dev
 ```
+
+**Two database URLs, deliberately.** `DATABASE_URL` is the role the application
+connects as: no superuser, no `BYPASSRLS`, so row-level security actually applies
+to it. `DATABASE_ADMIN_URL` is the schema owner, used only by migrations and
+seeding. Row-level security is worthless if the app connects as a superuser, so
+the split is not optional.
+
+`npm run db:setup` runs the three steps individually available as `db:push`
+(schema), `db:sql` (triggers and policies) and `db:seed`.
 
 Then sign in at http://localhost:3000 with:
 
@@ -52,7 +59,10 @@ Password `protektor`, shop-floor PIN `1234`. **Demo credentials — replace befo
 | `npm run typecheck` | TypeScript, no emit |
 | `npm test` | Unit tests for the pure logic (dates, state machine, scoring, hashing) |
 | `npm run stress` | Concurrency and scale checks against a seeded database |
+| `npm run db:setup` | Schema, triggers, RLS policies and seed data in one go |
 | `npm run db:push` | Sync schema to the database |
+| `npm run db:sql` | Apply the integrity triggers and RLS policies |
+| `npm run test:isolation` | Adversarial cross-tenant test against a real second tenant |
 | `npm run db:seed` | Reset and reload the example data |
 | `npm run verify` | Verify every hash chain and every photograph, and prove the integrity guards hold |
 | `npm run e2e` | Walk the whole training write path in a browser (needs a running server) |
@@ -91,6 +101,19 @@ the same moment collide on the unique index and one write is rejected. A
 transaction-scoped advisory lock keyed on the stream serialises that stream only.
 `npm run stress` proves 25 concurrent appends all commit.
 
+**Tenant isolation is enforced by the database.** Every table carries a policy
+keyed on the tenant set for the current transaction, and the application connects
+as a role that cannot bypass it. Requests run inside `asTenant(tenantId, …)`, which
+sets that tenant with `set_config(..., is_local => true)` so it lives for exactly
+one transaction and cannot leak to the next request that borrows the same pooled
+connection. Policies compare with `=` against a NULL-when-unset value, so
+forgetting to set the context returns nothing rather than everything — it fails
+closed. Authentication necessarily runs before any tenant is known, so sign-in and
+session resolution go through four narrow `SECURITY DEFINER` functions that are the
+only path past the policies. `npm run test:isolation` stands up a second tenant and
+tries to read, update, delete and insert across the boundary, and to turn the
+policies off.
+
 **Attachments are immutable and content-addressed.** A revision references a
 photograph by id and the revision hash covers that id, so if the bytes behind an id
 could change, the revision would still verify while the procedure people signed
@@ -123,6 +146,7 @@ src/
     competence.ts   Status/level metadata, formatting
 drizzle/
   guards.sql        Append-only and immutability triggers
+  rls.sql           Tenant policies, the application role, and the auth functions
 scripts/
   verify-integrity.ts
 e2e/
@@ -220,6 +244,7 @@ consequence of the procedure having moved on beneath them.
 | `npm test` | Pure logic — date arithmetic, the state machine, risk banding, content hashing, document parsing of older shapes |
 | `npm run verify` | Every hash chain, every photograph's content address, and that each database guard actually refuses what it must |
 | `npm run stress` | Concurrent appends to one stream, matrix cost at 250 people × 60 machines, whole-log verification, concurrent identical uploads |
+| `npm run test:isolation` | A real second tenant attempting cross-tenant reads, writes and privilege escalation |
 | `npm run e2e` | The training lifecycle in a browser, end to end |
 | `npm run e2e:authoring` | Document authoring, separation of duties, and the supersession cascade |
 
@@ -232,8 +257,5 @@ Deliberately out of scope for this phase — see [the roadmap](docs/05-roadmap.m
 
 - Adding people and machines through the UI
 - Offline capture for the shop floor (planned as a PWA with a local event log)
-- **Row-level security.** Queries are scoped to the tenant in application code and
-  audited, but the isolation is not yet enforced by the database. That is the right
-  belt-and-braces before a second customer's data is in the same instance.
 - Evidence pack export as PDF/A (the print view is a stand-in)
 - Production target calculator

@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
-import { db, schema } from "@/db";
-import { eq, and } from "drizzle-orm";
 import { atLeast } from "@/lib/state-machine";
 import { DocumentEditor } from "@/components/document-editor";
+import { getDraftRevision } from "@/lib/queries";
 import { readSop, readRa } from "@/lib/documents";
 import { routes } from "@/lib/routes";
 
@@ -19,28 +18,7 @@ export default async function EditRevisionPage({
   const user = await requireUser();
   if (!atLeast(user.role, "MANAGER")) redirect(routes.document(id));
 
-  const [row] = await db
-    .select({
-      revisionId: schema.documentRevisions.id,
-      revision: schema.documentRevisions.revision,
-      status: schema.documentRevisions.status,
-      body: schema.documentRevisions.body,
-      changeSummary: schema.documentRevisions.changeSummary,
-      documentId: schema.documents.id,
-      kind: schema.documents.kind,
-      title: schema.documents.title,
-      reference: schema.documents.reference,
-      machineCode: schema.machines.code,
-    })
-    .from(schema.documentRevisions)
-    .innerJoin(schema.documents, eq(schema.documentRevisions.documentId, schema.documents.id))
-    .leftJoin(schema.machines, eq(schema.documents.machineId, schema.machines.id))
-    .where(and(
-      eq(schema.documentRevisions.tenantId, user.tenantId),
-      eq(schema.documentRevisions.id, revisionId),
-      eq(schema.documents.id, id),
-    ))
-    .limit(1);
+  const row = await getDraftRevision(user.tenantId, id, revisionId);
 
   if (!row) notFound();
   // A published revision is frozen; there is nothing to edit.

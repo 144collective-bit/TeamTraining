@@ -22,7 +22,7 @@ honest position against it, kept here so the roadmap and the code do not drift.
 | Manager dashboard — coverage, gaps, expiries, single points | Built |
 | Offline capture (PWA with a local event log) | **Not built** |
 | One-click evidence pack (PDF/A + JSON sidecar) | **Not built** — print view is a stand-in |
-| Row-level security policies | **Not built** — queries are scoped in application code |
+| Row-level security policies | Built — enforced by the database, with an adversarial cross-tenant test |
 | Adding people and machines through the UI | **Not built** — seeded only |
 
 Phases 2–4 below are untouched.

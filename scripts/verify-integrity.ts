@@ -5,7 +5,9 @@
  * Run with: npm run verify
  */
 import "dotenv/config";
-import { db, schema } from "@/db";
+import { getAdminDb, schema } from "@/db";
+
+const db = getAdminDb();
 import { verifyStream } from "@/lib/events";
 import { sha256Bytes } from "@/lib/crypto";
 import { sql } from "drizzle-orm";
@@ -19,7 +21,7 @@ async function main() {
     .from(schema.events);
 
   for (const { streamId } of streams) {
-    const result = await verifyStream(streamId);
+    const result = await db.transaction((tx) => verifyStream(tx, streamId));
     if (!result.ok) {
       failures++;
       console.error(`  FAIL ${streamId}: ${result.brokenAt?.reason} at #${result.brokenAt?.seq}`);

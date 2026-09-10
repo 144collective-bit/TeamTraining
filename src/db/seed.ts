@@ -5,7 +5,11 @@
  * Run with: npm run db:seed
  */
 import "dotenv/config";
-import { db, schema } from "./index";
+import { getAdminDb, schema } from "./index";
+
+// Seeding creates the tenants themselves, so it runs as the schema owner and
+// is not subject to row-level security.
+const db = getAdminDb();
 import { hashSecret, contentHash, sha256Bytes } from "@/lib/crypto";
 import { appendEvent } from "@/lib/events";
 import { sql } from "drizzle-orm";

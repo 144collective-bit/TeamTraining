@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/session";
-import { getCompetence } from "@/lib/queries";
-import { streamHistory, verifyStream } from "@/lib/events";
+import { getCompetence, getCompetenceAudit } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
 import { StatusPill } from "@/components/status-pill";
@@ -24,7 +23,7 @@ export default async function CompetencePage({ params }: { params: Promise<{ id:
   const canManage = atLeast(user.role, "MANAGER");
   const canTrain =
     atLeast(user.role, "TRAINER") || record.trainerId === user.id;
-  const [history, integrity] = await Promise.all([streamHistory(id), verifyStream(id)]);
+  const { history, integrity } = await getCompetenceAudit(user.tenantId, id);
 
   const expiryDays = daysUntil(record.expiresOn);
 

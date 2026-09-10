@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
-import { db, schema } from "@/db";
-import { eq, and, asc, sql } from "drizzle-orm";
 import { PageHeader } from "@/components/page-header";
+import { getPeopleOverview } from "@/lib/queries";
 import { formatDate } from "@/lib/competence";
 import { routes } from "@/lib/routes";
 
@@ -11,22 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function PeoplePage() {
   const user = await requireUser();
 
-  const people = await db
-    .select({
-      id: schema.users.id,
-      name: schema.users.name,
-      employeeRef: schema.users.employeeRef,
-      jobTitle: schema.users.jobTitle,
-      role: schema.users.role,
-      startedOn: schema.users.startedOn,
-      competent: sql<number>`(select count(*) from ${schema.competenceRecords} c where c.user_id = ${schema.users.id} and c.status = 'COMPETENT')`.mapWith(Number),
-      training: sql<number>`(select count(*) from ${schema.competenceRecords} c where c.user_id = ${schema.users.id} and c.status in ('IN_TRAINING','ASSESSMENT','INDUCTION'))`.mapWith(Number),
-      action: sql<number>`(select count(*) from ${schema.competenceRecords} c where c.user_id = ${schema.users.id} and c.status in ('REQUIRES_REVALIDATION','SUSPENDED'))`.mapWith(Number),
-      canTrain: sql<number>`(select count(*) from ${schema.competenceRecords} c where c.user_id = ${schema.users.id} and c.status = 'COMPETENT' and c.level = 'TRAINER')`.mapWith(Number),
-    })
-    .from(schema.users)
-    .where(and(eq(schema.users.tenantId, user.tenantId), eq(schema.users.status, "ACTIVE")))
-    .orderBy(asc(schema.users.name));
+  const people = await getPeopleOverview(user.tenantId);
 
   return (
     <>

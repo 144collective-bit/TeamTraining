@@ -1,6 +1,6 @@
 "use server";
 
-import { db, schema } from "@/db";
+import { asTenant, schema } from "@/db";
 import { eq, and } from "drizzle-orm";
 import { requireUser } from "./session";
 import { sha256Bytes } from "./crypto";
@@ -44,31 +44,33 @@ export async function uploadAttachment(formData: FormData): Promise<UploadResult
 
     const hash = sha256Bytes(buffer);
 
-    const [existing] = await db
-      .select({ id: schema.attachments.id, filename: schema.attachments.filename })
-      .from(schema.attachments)
-      .where(and(
-        eq(schema.attachments.tenantId, user.tenantId),
-        eq(schema.attachments.sha256, hash),
-      ))
-      .limit(1);
+    return await asTenant(user.tenantId, async (tx) => {
+      const [existing] = await tx
+        .select({ id: schema.attachments.id, filename: schema.attachments.filename })
+        .from(schema.attachments)
+        .where(and(
+          eq(schema.attachments.tenantId, user.tenantId),
+          eq(schema.attachments.sha256, hash),
+        ))
+        .limit(1);
 
-    if (existing) return { ok: true, id: existing.id, filename: existing.filename };
+      if (existing) return { ok: true as const, id: existing.id, filename: existing.filename };
 
-    const [created] = await db
-      .insert(schema.attachments)
-      .values({
-        tenantId: user.tenantId,
-        sha256: hash,
-        mimeType: sniffed,
-        byteSize: buffer.byteLength,
-        filename: file.name.slice(0, 200),
-        data: buffer,
-        uploadedBy: user.id,
-      })
-      .returning({ id: schema.attachments.id, filename: schema.attachments.filename });
+      const [created] = await tx
+        .insert(schema.attachments)
+        .values({
+          tenantId: user.tenantId,
+          sha256: hash,
+          mimeType: sniffed,
+          byteSize: buffer.byteLength,
+          filename: file.name.slice(0, 200),
+          data: buffer,
+          uploadedBy: user.id,
+        })
+        .returning({ id: schema.attachments.id, filename: schema.attachments.filename });
 
-    return { ok: true, id: created.id, filename: created.filename };
+      return { ok: true as const, id: created.id, filename: created.filename };
+    });
   } catch (e) {
     if (e instanceof PermissionError) return { ok: false, error: e.message };
     console.error("[uploadAttachment]", e);

@@ -1,4 +1,4 @@
-import { db, schema } from "@/db";
+import { asTenant, schema } from "@/db";
 import { eq, and } from "drizzle-orm";
 import { getSessionUser } from "@/lib/session";
 
@@ -19,7 +19,7 @@ export async function GET(
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) return new Response("Not found", { status: 404 });
 
-  const [row] = await db
+  const [row] = await asTenant(user.tenantId, (tx) => tx
     .select({
       data: schema.attachments.data,
       mimeType: schema.attachments.mimeType,
@@ -31,7 +31,7 @@ export async function GET(
       eq(schema.attachments.id, id),
       eq(schema.attachments.tenantId, user.tenantId),
     ))
-    .limit(1);
+    .limit(1));
 
   if (!row) return new Response("Not found", { status: 404 });
 

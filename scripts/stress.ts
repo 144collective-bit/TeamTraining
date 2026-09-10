@@ -8,7 +8,9 @@
  * hash-chain verification over a large log.
  */
 import "dotenv/config";
-import { db, schema } from "@/db";
+import { getAdminDb, schema } from "@/db";
+
+const db = getAdminDb();
 import { appendEvent, verifyStream } from "@/lib/events";
 import { contentHash, sha256Bytes } from "@/lib/crypto";
 import { eq, and, sql } from "drizzle-orm";
@@ -82,7 +84,7 @@ async function main() {
     check("concurrent appends never duplicate a sequence number", unique,
       `${ok} committed, ${rejected} rejected, ${seqs.length} rows`);
 
-    const verified = await verifyStream(record.id);
+    const verified = await db.transaction((tx) => verifyStream(tx, record.id));
     check("hash chain survives concurrent appends", verified.ok,
       verified.ok ? `${verified.checked} events` : `${verified.brokenAt?.reason} at #${verified.brokenAt?.seq}`);
 
@@ -179,7 +181,7 @@ async function main() {
     const [broken, ms] = await time(async () => {
       let bad = 0;
       for (const { streamId } of streams) {
-        const r = await verifyStream(streamId);
+        const r = await db.transaction((tx) => verifyStream(tx, streamId));
         if (!r.ok) bad++;
       }
       return bad;
