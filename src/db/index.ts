@@ -11,42 +11,85 @@ import * as schema from "./schema";
  * policies in drizzle/rls.sql. Nothing it reads or writes can escape the tenant
  * set for the current transaction.
  *
- * `adminDb` connects as the schema owner and is NOT subject to those policies.
- * It exists for migrations and seeding only — never for request handling.
+ * `getAdminDb()` connects as the schema owner and is NOT subject to those
+ * policies. It exists for migrations and seeding only — never for serving a
+ * request.
+ *
+ * Both are created lazily. Next imports every route module while collecting
+ * page data at build time, so connecting (or throwing over a missing variable)
+ * at module scope fails the build on any machine without the database
+ * configured — which is exactly what happened on the first Vercel deploy.
  */
 
-const appUrl = process.env.DATABASE_URL;
-if (!appUrl) {
-  throw new Error("DATABASE_URL is not set. Copy .env.example to .env and fill it in.");
-}
+type Db = ReturnType<typeof makeDb>;
 
 const globalForDb = globalThis as unknown as {
-  __ttApp?: postgres.Sql;
-  __ttAdmin?: postgres.Sql;
+  __ttApp?: Db;
+  __ttAdmin?: Db;
 };
 
-const poolSize = process.env.NODE_ENV === "production" ? 10 : 3;
+function makeDb(url: string, max: number) {
+  const client = postgres(url, {
+    max,
+    idle_timeout: 20,
+    connect_timeout: 10,
+    /**
+     * Transaction-mode connection poolers (PgBouncer, and the Neon and
+     * Supabase poolers) do not support prepared statements. Serverless
+     * deployments go through one, so this has to be off.
+     *
+     * The tenant context is safe across such a pooler because it is set with
+     * `set_config(..., is_local => true)` inside a transaction, and transaction
+     * pooling holds one server connection for the whole transaction.
+     */
+    prepare: false,
+  });
+  return drizzle(client, { schema });
+}
 
-const appClient = globalForDb.__ttApp ?? postgres(appUrl, { max: poolSize });
-if (process.env.NODE_ENV !== "production") globalForDb.__ttApp = appClient;
+/** How many connections one serverless instance may hold. */
+const APP_POOL = Number(process.env.DATABASE_POOL_MAX ?? (process.env.VERCEL ? 1 : 5));
 
-export const db = drizzle(appClient, { schema });
+function appDb(): Db {
+  if (globalForDb.__ttApp) return globalForDb.__ttApp;
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "DATABASE_URL is not set. It must point at the application role — a role with " +
+        "NOSUPERUSER and NOBYPASSRLS, so row-level security applies. See .env.example.",
+    );
+  }
+  const instance = makeDb(url, APP_POOL);
+  globalForDb.__ttApp = instance;
+  return instance;
+}
+
+/**
+ * The application connection. Every request-path read and write goes through
+ * `asTenant` rather than touching this directly.
+ */
+export const db = new Proxy({} as Db, {
+  get(_target, prop, receiver) {
+    return Reflect.get(appDb() as object, prop, receiver);
+  },
+});
 
 /** Migrations and seeding only. Bypasses row-level security. */
-export function getAdminDb() {
-  const adminUrl = process.env.DATABASE_ADMIN_URL;
-  if (!adminUrl) {
+export function getAdminDb(): Db {
+  if (globalForDb.__ttAdmin) return globalForDb.__ttAdmin;
+  const url = process.env.DATABASE_ADMIN_URL;
+  if (!url) {
     throw new Error(
       "DATABASE_ADMIN_URL is not set. It is required for migrations and seeding, " +
         "and must point at the schema owner rather than the application role.",
     );
   }
-  const client = globalForDb.__ttAdmin ?? postgres(adminUrl, { max: 2 });
-  if (process.env.NODE_ENV !== "production") globalForDb.__ttAdmin = client;
-  return drizzle(client, { schema });
+  const instance = makeDb(url, 2);
+  globalForDb.__ttAdmin = instance;
+  return instance;
 }
 
-export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /**
  * Run work with a tenant in scope.

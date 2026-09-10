@@ -155,6 +155,11 @@ e2e/
 docs/               Research and planning (see docs/README below)
 ```
 
+## Deploying
+
+See [DEPLOY.md](DEPLOY.md). The short version: the app needs Postgres with two
+roles, and `npm run db:sql` applied, before it can sign anyone in.
+
 ## Planning and research
 
 The design decisions behind this are documented in [`docs/`](docs/):
