@@ -7,6 +7,8 @@ import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
 import { StatusPill } from "@/components/status-pill";
 import { formatDate, formatDateTime, daysUntil, type Status, type Level } from "@/lib/competence";
+import { CompetenceActions, VoidSignOff } from "@/components/competence-actions";
+import { atLeast } from "@/lib/state-machine";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +18,10 @@ export default async function CompetencePage({ params }: { params: Promise<{ id:
   const data = await getCompetence(user.tenantId, id);
   if (!data) notFound();
 
-  const { record, signatures, sessions, signOffs } = data;
+  const { record, signatures, sessions, signOffs, assessments, openSession } = data;
+  const canManage = atLeast(user.role as never, "MANAGER");
+  const canTrain =
+    atLeast(user.role as never, "TRAINER") || record.trainerId === user.id;
   const [history, integrity] = await Promise.all([streamHistory(id), verifyStream(id)]);
 
   const expiryDays = daysUntil(record.expiresOn);
@@ -70,6 +75,18 @@ export default async function CompetencePage({ params }: { params: Promise<{ id:
               </dl>
             </section>
 
+            <CompetenceActions
+              competenceId={record.id}
+              status={record.status as Status}
+              traineeName={record.userName}
+              machineCode={record.machineCode}
+              openSessionId={openSession?.id ?? null}
+              signedRoles={signatures.map((s) => s.role)}
+              lastAssessmentPassed={assessments[0]?.passed ?? null}
+              canTrain={canTrain}
+              canManage={canManage}
+            />
+
             {/* Daily sign-offs */}
             <section className="card">
               <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pt-4 pb-3 border-b" style={{ borderColor: "var(--border)" }}>
@@ -90,11 +107,16 @@ export default async function CompetencePage({ params }: { params: Promise<{ id:
                           <span className="text-[13px] font-semibold tabular">{formatDate(s.onDate)}</span>
                           <Rating value={s.rating} />
                           <span className="text-[11.5px] text-[var(--ink-faint)]">
-                            {Array.isArray(s.stepsCovered) ? `Steps 1–${(s.stepsCovered as number[]).length}` : ""}
+                            {Array.isArray(s.stepsCovered) && s.stepsCovered.length > 0
+                              ? `Steps ${(s.stepsCovered as number[]).join(", ")}`
+                              : ""}
                           </span>
                           <span className="ml-auto text-[11.5px] text-[var(--ink-faint)]">{s.recorderName}</span>
                         </div>
                         {s.note && <p className="mt-1 text-[12.5px] text-[var(--ink-soft)]">{s.note}</p>}
+                        {!s.voidedAt && canTrain && (
+                          <div className="mt-1 no-print"><VoidSignOff signOffId={s.id} /></div>
+                        )}
                         {s.voidedAt && (
                           <p className="mt-1 text-[11.5px] font-medium" style={{ color: "var(--st-suspended-fg)" }}>
                             Voided — {s.voidReason}
@@ -111,6 +133,37 @@ export default async function CompetencePage({ params }: { params: Promise<{ id:
                 </ul>
               )}
             </section>
+
+            {assessments.length > 0 && (
+              <section className="card">
+                <div className="px-5 pt-4 pb-3 border-b" style={{ borderColor: "var(--border)" }}>
+                  <h2 className="text-[15px] font-semibold tracking-tight">Assessments</h2>
+                </div>
+                <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
+                  {assessments.map((a) => (
+                    <li key={a.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-5 py-3">
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[11px] font-bold"
+                        style={
+                          a.passed
+                            ? { background: "var(--st-competent-bg)", color: "var(--st-competent-fg)" }
+                            : { background: "var(--st-training-bg)", color: "var(--st-training-fg)" }
+                        }
+                      >
+                        {a.passed ? "PASSED" : "NOT YET"}
+                      </span>
+                      <span className="text-[13px] font-medium">{a.assessorName}</span>
+                      <span className="ml-auto text-[11.5px] text-[var(--ink-faint)] tabular">
+                        {formatDateTime(a.assessedAt)}
+                      </span>
+                      {a.note && (
+                        <p className="w-full text-[12.5px] text-[var(--ink-soft)]">{a.note}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             {/* Signatures */}
             <section className="card">

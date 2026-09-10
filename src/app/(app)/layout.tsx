@@ -33,6 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </p>
           <NavLink href="/dashboard" icon="grid">Dashboard</NavLink>
           <NavLink href="/matrix" icon="matrix">Training matrix</NavLink>
+          <NavLink href="/signoff" icon="check">Today's sign-offs</NavLink>
 
           <p className="hidden lg:block label px-2.5 pt-4 pb-1.5" style={{ color: "var(--rail-ink-soft)" }}>
             Records

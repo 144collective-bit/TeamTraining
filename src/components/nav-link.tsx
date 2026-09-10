@@ -31,6 +31,12 @@ const ICONS: Record<string, React.ReactNode> = {
       <path d="M5.5 7.5v-3h7v3M8 11h2" />
     </>
   ),
+  check: (
+    <>
+      <path d="M6 3.5h6a1.5 1.5 0 0 1 1.5 1.5v9.5a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V5A1.5 1.5 0 0 1 6 3.5Z" />
+      <path d="M6.5 9.5 8 11l3.5-3.5M6.5 2.5h5v2h-5z" />
+    </>
+  ),
   doc: (
     <>
       <path d="M4.5 2.5h6l3 3v10a.5.5 0 0 1-.5.5h-8.5a.5.5 0 0 1-.5-.5v-12a.5.5 0 0 1 .5-.5Z" />

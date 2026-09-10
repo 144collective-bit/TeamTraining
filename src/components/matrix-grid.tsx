@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { MatrixMachine, MatrixRow, Coverage } from "@/lib/queries";
+import { StartTrainingDialog, type Trainer } from "./start-training";
 import {
   STATUS_META, LEVEL_META, formatDate, daysUntil,
   type Status, type Level,
@@ -10,15 +11,25 @@ import {
 
 type Filter = "ALL" | "GAPS" | "ACTION" | "TRAINING";
 
+type StartTarget = {
+  userId: string; userName: string;
+  machineId: string; machineCode: string; machineName: string;
+};
+
 export function MatrixGrid({
   machines,
   rows,
   coverage,
+  trainers,
+  canTrain,
 }: {
   machines: MatrixMachine[];
   rows: MatrixRow[];
   coverage: Coverage[];
+  trainers: Trainer[];
+  canTrain: boolean;
 }) {
+  const [startTarget, setStartTarget] = useState<StartTarget | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
   const [area, setArea] = useState<string>("ALL");
@@ -183,7 +194,20 @@ export function MatrixGrid({
                 </th>
                 {visibleMachines.map((m) => (
                   <td key={m.id} className="cell">
-                    <Cell cell={row.cells[m.id]} person={row.name} machine={m} />
+                    <Cell
+                      cell={row.cells[m.id]}
+                      person={row.name}
+                      machine={m}
+                      onStart={
+                        canTrain
+                          ? () =>
+                              setStartTarget({
+                                userId: row.userId, userName: row.name,
+                                machineId: m.id, machineCode: m.code, machineName: m.name,
+                              })
+                          : undefined
+                      }
+                    />
                   </td>
                 ))}
                 <td aria-hidden />
@@ -224,6 +248,14 @@ export function MatrixGrid({
       </div>
 
       <Legend />
+
+      {startTarget && (
+        <StartTrainingDialog
+          target={startTarget}
+          trainers={trainers}
+          onClose={() => setStartTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -232,10 +264,12 @@ function Cell({
   cell,
   person,
   machine,
+  onStart,
 }: {
   cell: MatrixRow["cells"][string] | undefined;
   person: string;
   machine: MatrixMachine;
+  onStart?: () => void;
 }) {
   const status: Status = cell?.status ?? "NOT_TRAINED";
   const meta = STATUS_META[status];
@@ -264,17 +298,33 @@ function Cell({
 
   const className = `chip st-${status}${isTrainer ? " is-trainer" : ""}`;
 
-  if (!cell) {
+  const untrained = !cell || cell.status === "NOT_TRAINED";
+
+  if (untrained) {
+    if (!onStart) {
+      return (
+        <span className={className} title={title} role="img"
+              aria-label={`${person}, ${machine.name}: no training recorded`}>
+          {content}
+        </span>
+      );
+    }
     return (
-      <span className={className} title={title} role="img" aria-label={`${person}, ${machine.name}: no training recorded`}>
+      <button
+        type="button"
+        onClick={onStart}
+        className={className}
+        title={`${title}\nStart training`}
+        aria-label={`Start training ${person} on ${machine.name}`}
+      >
         {content}
-      </span>
+      </button>
     );
   }
 
   return (
     <Link
-      href={`/competence/${cell.competenceId}` as never}
+      href={`/competence/${cell!.competenceId}` as never}
       className={className}
       title={title}
       aria-label={`${person}, ${machine.name}: ${meta.label}`}

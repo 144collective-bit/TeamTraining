@@ -429,6 +429,7 @@ export async function getCompetence(tenantId: string, competenceId: string) {
       machineId: schema.machines.id,
       machineCode: schema.machines.code,
       machineName: schema.machines.name,
+      trainerId: schema.competenceRecords.trainerId,
       trainerName: sql<string | null>`(select name from ${schema.users} t where t.id = ${schema.competenceRecords.trainerId})`,
       approverName: sql<string | null>`(select name from ${schema.users} t where t.id = ${schema.competenceRecords.approvedBy})`,
     })
@@ -491,5 +492,173 @@ export async function getCompetence(tenantId: string, competenceId: string) {
         .orderBy(desc(schema.dailySignOffs.onDate))
     : [];
 
-  return { record, signatures: sigs, sessions, signOffs };
+  const assessmentRows = await db
+    .select({
+      id: schema.assessments.id,
+      passed: schema.assessments.passed,
+      note: schema.assessments.note,
+      assessedAt: schema.assessments.assessedAt,
+      assessorName: schema.users.name,
+    })
+    .from(schema.assessments)
+    .innerJoin(schema.users, eq(schema.assessments.assessorId, schema.users.id))
+    .where(eq(schema.assessments.competenceId, competenceId))
+    .orderBy(desc(schema.assessments.assessedAt));
+
+  const openSession = sessions.find((s) => !s.completedOn) ?? null;
+
+  return { record, signatures: sigs, sessions, signOffs, assessments: assessmentRows, openSession };
+}
+
+/* ------------------------------------------------------------------ *
+ * Sign-off capture
+ * ------------------------------------------------------------------ */
+
+/**
+ * Open training sessions. A trainer sees their own; managers see everything,
+ * because they cover when a trainer is off.
+ */
+export async function getOpenSessions(
+  tenantId: string,
+  userId: string,
+  seeAll: boolean,
+) {
+  const where = seeAll
+    ? and(
+        eq(schema.trainingSessions.tenantId, tenantId),
+        sql`${schema.trainingSessions.completedOn} is null`,
+      )
+    : and(
+        eq(schema.trainingSessions.tenantId, tenantId),
+        eq(schema.trainingSessions.trainerId, userId),
+        sql`${schema.trainingSessions.completedOn} is null`,
+      );
+
+  return db
+    .select({
+      sessionId: schema.trainingSessions.id,
+      competenceId: schema.trainingSessions.competenceId,
+      startedOn: schema.trainingSessions.startedOn,
+      traineeId: schema.users.id,
+      traineeName: schema.users.name,
+      traineeRef: schema.users.employeeRef,
+      machineId: schema.machines.id,
+      machineCode: schema.machines.code,
+      machineName: schema.machines.name,
+      status: schema.competenceRecords.status,
+      trainerId: schema.trainingSessions.trainerId,
+      trainerName: sql<string>`(select name from ${schema.users} t where t.id = ${schema.trainingSessions.trainerId})`,
+      entries: sql<number>`(select count(*) from ${schema.dailySignOffs} d where d.training_session_id = ${schema.trainingSessions.id} and d.voided_at is null)`.mapWith(Number),
+      lastEntry: sql<string | null>`(select max(d.on_date) from ${schema.dailySignOffs} d where d.training_session_id = ${schema.trainingSessions.id} and d.voided_at is null)`,
+      signedToday: sql<boolean>`exists (select 1 from ${schema.dailySignOffs} d where d.training_session_id = ${schema.trainingSessions.id} and d.voided_at is null and d.on_date = current_date)`,
+    })
+    .from(schema.trainingSessions)
+    .innerJoin(schema.users, eq(schema.trainingSessions.traineeId, schema.users.id))
+    .innerJoin(schema.machines, eq(schema.trainingSessions.machineId, schema.machines.id))
+    .innerJoin(schema.competenceRecords, eq(schema.trainingSessions.competenceId, schema.competenceRecords.id))
+    .where(where)
+    .orderBy(asc(schema.users.name));
+}
+
+/** One session plus the SOP steps the trainer ticks against. */
+export async function getSessionForCapture(tenantId: string, sessionId: string) {
+  const [session] = await db
+    .select({
+      sessionId: schema.trainingSessions.id,
+      competenceId: schema.trainingSessions.competenceId,
+      startedOn: schema.trainingSessions.startedOn,
+      trainerId: schema.trainingSessions.trainerId,
+      traineeId: schema.users.id,
+      traineeName: schema.users.name,
+      traineeRef: schema.users.employeeRef,
+      machineId: schema.machines.id,
+      machineCode: schema.machines.code,
+      machineName: schema.machines.name,
+      sopRevisionId: schema.trainingSessions.sopRevisionId,
+      sopBody: schema.documentRevisions.body,
+      sopRevision: schema.documentRevisions.revision,
+      sopReference: schema.documents.reference,
+      sopDocumentId: schema.documents.id,
+    })
+    .from(schema.trainingSessions)
+    .innerJoin(schema.users, eq(schema.trainingSessions.traineeId, schema.users.id))
+    .innerJoin(schema.machines, eq(schema.trainingSessions.machineId, schema.machines.id))
+    .leftJoin(schema.documentRevisions, eq(schema.trainingSessions.sopRevisionId, schema.documentRevisions.id))
+    .leftJoin(schema.documents, eq(schema.documentRevisions.documentId, schema.documents.id))
+    .where(and(
+      eq(schema.trainingSessions.tenantId, tenantId),
+      eq(schema.trainingSessions.id, sessionId),
+    ))
+    .limit(1);
+
+  if (!session) return null;
+
+  const recent = await db
+    .select({
+      id: schema.dailySignOffs.id,
+      onDate: schema.dailySignOffs.onDate,
+      rating: schema.dailySignOffs.rating,
+      stepsCovered: schema.dailySignOffs.stepsCovered,
+      note: schema.dailySignOffs.note,
+      voidedAt: schema.dailySignOffs.voidedAt,
+      recorderName: schema.users.name,
+    })
+    .from(schema.dailySignOffs)
+    .innerJoin(schema.users, eq(schema.dailySignOffs.recordedBy, schema.users.id))
+    .where(eq(schema.dailySignOffs.trainingSessionId, sessionId))
+    .orderBy(desc(schema.dailySignOffs.onDate))
+    .limit(5);
+
+  return { session, recent };
+}
+
+/** People and machines available to start training on. */
+export async function getTrainingOptions(tenantId: string) {
+  const people = await db
+    .select({ id: schema.users.id, name: schema.users.name, employeeRef: schema.users.employeeRef, role: schema.users.role })
+    .from(schema.users)
+    .where(and(eq(schema.users.tenantId, tenantId), eq(schema.users.status, "ACTIVE")))
+    .orderBy(asc(schema.users.name));
+
+  const machines = await db
+    .select({ id: schema.machines.id, code: schema.machines.code, name: schema.machines.name })
+    .from(schema.machines)
+    .where(and(eq(schema.machines.tenantId, tenantId), eq(schema.machines.active, true)))
+    .orderBy(asc(schema.machines.sortOrder));
+
+  return { people, machines };
+}
+
+/** Who can train on a given machine - level TRAINER competences. */
+export async function getEligibleTrainers(tenantId: string, machineId?: string) {
+  const base = db
+    .select({
+      id: schema.users.id,
+      name: schema.users.name,
+      role: schema.users.role,
+      machineId: schema.competenceRecords.machineId,
+    })
+    .from(schema.users)
+    .leftJoin(
+      schema.competenceRecords,
+      and(
+        eq(schema.competenceRecords.userId, schema.users.id),
+        eq(schema.competenceRecords.status, "COMPETENT"),
+        eq(schema.competenceRecords.level, "TRAINER"),
+      ),
+    )
+    .where(and(
+      eq(schema.users.tenantId, tenantId),
+      eq(schema.users.status, "ACTIVE"),
+      inArray(schema.users.role, ["TRAINER", "MANAGER", "ADMIN"]),
+    ))
+    .orderBy(asc(schema.users.name));
+
+  const rows = await base;
+  const byId = new Map<string, { id: string; name: string; role: string; machines: string[] }>();
+  for (const r of rows) {
+    if (!byId.has(r.id)) byId.set(r.id, { id: r.id, name: r.name, role: r.role, machines: [] });
+    if (r.machineId) byId.get(r.id)!.machines.push(r.machineId);
+  }
+  return [...byId.values()];
 }

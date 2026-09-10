@@ -6,6 +6,8 @@ import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
 import { StatusPill } from "@/components/status-pill";
 import { formatDate, formatDateTime, daysUntil, type Status, type Level } from "@/lib/competence";
+import { InductionItem } from "@/components/induction-item";
+import { atLeast } from "@/lib/state-machine";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +18,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
   if (!data) notFound();
 
   const { person, competences, induction, inductionItems } = data;
+  const canEditInduction = atLeast(user.role as never, "TRAINER");
   const competent = competences.filter((c) => c.status === "COMPETENT");
   const inductionDone = inductionItems.filter((i) => i.completedAt).length;
 
@@ -43,25 +46,13 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
             </div>
             <ol className="divide-y" style={{ borderColor: "var(--border)" }}>
               {inductionItems.map((item) => (
-                <li key={item.id} className="flex items-center gap-3 px-5 py-2.5">
-                  <span
-                    className="grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[11px] font-bold"
-                    style={
-                      item.completedAt
-                        ? { background: "var(--st-competent-bg)", color: "var(--st-competent-fg)", borderColor: "var(--st-competent-br)" }
-                        : { background: "var(--surface-sunk)", color: "var(--ink-faint)", borderColor: "var(--border-strong)" }
-                    }
-                    aria-hidden
-                  >
-                    {item.completedAt ? "✓" : ""}
-                  </span>
-                  <span className={`flex-1 text-[13.5px] ${item.completedAt ? "" : "text-[var(--ink-soft)]"}`}>
-                    {item.label}
-                  </span>
-                  <span className="text-[11.5px] text-[var(--ink-faint)] tabular">
-                    {item.completedAt ? formatDateTime(item.completedAt) : "Outstanding"}
-                  </span>
-                </li>
+                <InductionItem
+                  key={item.id}
+                  id={item.id}
+                  label={item.label}
+                  completedAt={item.completedAt}
+                  canEdit={canEditInduction}
+                />
               ))}
             </ol>
           </section>

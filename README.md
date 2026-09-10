@@ -12,7 +12,8 @@ Built as a working example for **Protektor UK** (Kidderminster): 6 press brakes,
 
 | | |
 |---|---|
-| **Training matrix** | People down the left, machines across the top. Sticky name column and header, per-machine competent-operator count, single-point-of-failure warnings. |
+| **Training matrix** | People down the left, machines across the top. Sticky name column and header, per-machine competent-operator count, single-point-of-failure warnings. Selecting an empty cell starts training. |
+| **Daily sign-offs** | The trainer's fast capture screen: pick a trainee, tap a progress rating, confirm the procedure steps covered, save. Pre-ticks what earlier sessions covered so it is confirm-not-enter. |
 | **Competence records** | Status, level, expiry, tri-signature evidence bundle and a verified hash-chained audit trail per person per machine. |
 | **Controlled documents** | SOPs and risk assessments with immutable revisions. Published revisions cannot be edited or deleted — the database rejects it. |
 | **Induction** | Per-person checklist tied to the site risk assessment, with completion timestamps. |
@@ -51,6 +52,7 @@ Password `protektor`, shop-floor PIN `1234`. **Demo credentials — replace befo
 | `npm run db:push` | Sync schema to the database |
 | `npm run db:seed` | Reset and reload the example data |
 | `npm run verify` | Verify every hash chain and prove the integrity guards hold |
+| `npm run e2e` | Walk the whole training write path in a browser (needs a running server) |
 
 ## How it's built
 
@@ -93,6 +95,8 @@ src/
     schema.ts       Drizzle schema
     seed.ts         The Protektor working example
   lib/
+    commands.ts     Every write: permission check, state machine, transaction
+    state-machine.ts Legal transitions, signature rules, declaration wording
     events.ts       Append-only log: appendEvent, verifyStream
     crypto.ts       scrypt hashing, canonical JSON, SHA-256
     queries.ts      Read models
@@ -101,6 +105,8 @@ drizzle/
   guards.sql        Append-only and immutability triggers
 scripts/
   verify-integrity.ts
+e2e/
+  write-path.mjs    Browser walk of the whole training lifecycle
 docs/               Research and planning (see docs/README below)
 ```
 
@@ -118,12 +124,39 @@ The design decisions behind this are documented in [`docs/`](docs/):
 | [06 — Open Questions](docs/06-open-questions.md) | Decisions still needed |
 | [07 — Sources](docs/07-sources.md) | Research references |
 
+## The write path
+
+The full training lifecycle can be recorded:
+
+```
+start training → daily sign-off (×n) → ready for assessment → assessment
+    → trainee signs → trainer signs → manager signs → COMPETENT
+```
+
+Legal transitions are declared once in `src/lib/state-machine.ts` and enforced
+in `src/lib/commands.ts`; no command can move a record somewhere it should not
+go. Every command writes its projection and its event **in the same
+transaction**, so the read model and the audit log can never disagree.
+
+Also recordable: voiding a sign-off (with a reason — the original stays visible,
+marked void), quarterly reviews, suspension and reinstatement, revalidation, and
+induction checklist items.
+
+**Signing.** Each of the three signatures requires that person's own PIN, checked
+against their record — not the account holding the tablet. Competence is granted
+automatically when the third signature lands, which also closes the training
+session and sets the expiry and next review date.
+
+`npm run e2e` walks all of this in a real browser, including PIN rejection.
+
 ## Not built yet
 
 Deliberately out of scope for this phase — see [the roadmap](docs/05-roadmap.md):
 
-- Editing — the app is currently read-only over seeded data. Authoring SOPs,
-  recording sign-offs and granting competence are the next build.
+- **Authoring** — SOPs and risk assessments are seeded, not editable in the app.
+  Creating and revising controlled documents is the next build, and it is what
+  activates the change-classification and re-training triggers.
+- Adding people and machines through the UI
 - Offline capture for the shop floor (planned as a PWA with a local event log)
 - Row-level security policies for true multi-tenant isolation
 - Evidence pack export as PDF/A (the print view is a stand-in)
