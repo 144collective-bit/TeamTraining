@@ -1,0 +1,274 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   Design tokens
+
+   Industrial, restrained, high-contrast. A graphite navigation rail against a
+   near-white canvas, one accent colour, and a status palette that never
+   relies on hue alone - every matrix state also carries a glyph, because this
+   is a compliance tool and 1 in 12 men have a colour vision deficiency.
+   ========================================================================== */
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Graphite - the structural neutral */
+  --color-steel-50:  #f6f7f8;
+  --color-steel-100: #eceef0;
+  --color-steel-200: #d5dade;
+  --color-steel-300: #b0b9c0;
+  --color-steel-400: #84919b;
+  --color-steel-500: #647380;
+  --color-steel-600: #4e5b67;
+  --color-steel-700: #414b55;
+  --color-steel-800: #394048;
+  --color-steel-900: #33383e;
+  --color-steel-950: #1a1d21;
+  --color-steel-990: #121417;
+
+  /* Accent - Protektor red. Change here to rebrand the whole application. */
+  --color-brand-50:  #fff1f2;
+  --color-brand-100: #ffe0e3;
+  --color-brand-200: #ffc6cc;
+  --color-brand-300: #ff9da8;
+  --color-brand-400: #fb6476;
+  --color-brand-500: #f23449;
+  --color-brand-600: #de1830;
+  --color-brand-700: #c8102e;
+  --color-brand-800: #9c1226;
+  --color-brand-900: #851426;
+
+  --radius-card: 0.625rem;
+}
+
+:root {
+  --canvas:        #f7f8f9;
+  --surface:       #ffffff;
+  --surface-sunk:  #f1f3f5;
+  --border:        #e2e6ea;
+  --border-strong: #cdd4da;
+  --ink:           #1a1d21;
+  --ink-soft:      #4e5b67;
+  --ink-faint:     #84919b;
+  --rail:          #1a1d21;
+  --rail-ink:      #d5dade;
+  --rail-ink-soft: #84919b;
+  --rail-hover:    #262a30;
+  --rail-active:   #33383e;
+  --accent:        #c8102e;
+
+  /* Matrix status palette - light */
+  --st-competent-bg:   #dcf5e6;  --st-competent-fg:   #10653a;  --st-competent-br: #a4dfbd;
+  --st-trainer-bg:     #c9eddc;  --st-trainer-fg:     #0a5230;  --st-trainer-br:   #7fcda6;
+  --st-training-bg:    #fdf0cf;  --st-training-fg:    #7a5303;  --st-training-br:  #f2d38a;
+  --st-assessment-bg:  #dbeafe;  --st-assessment-fg:  #1e468f;  --st-assessment-br:#a9c9f5;
+  --st-induction-bg:   #e7e2f7;  --st-induction-fg:   #4a3899;  --st-induction-br: #c5bced;
+  --st-revalidate-bg:  #ffe6d2;  --st-revalidate-fg:  #8f3d06;  --st-revalidate-br:#f8c298;
+  --st-suspended-bg:   #ffe0e3;  --st-suspended-fg:   #9c1226;  --st-suspended-br: #f6adb6;
+  --st-none-bg:        #f1f3f5;  --st-none-fg:        #9aa5ad;  --st-none-br:      #e2e6ea;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas:        #121417;
+    --surface:       #1a1d21;
+    --surface-sunk:  #16181c;
+    --border:        #2c3138;
+    --border-strong: #3d444d;
+    --ink:           #eceef0;
+    --ink-soft:      #b0b9c0;
+    --ink-faint:     #84919b;
+    --rail:          #0d0f11;
+    --rail-ink:      #d5dade;
+    --rail-ink-soft: #7b8792;
+    --rail-hover:    #1c2025;
+    --rail-active:   #262a30;
+    --accent:        #f23449;
+
+    --st-competent-bg:   #123a26;  --st-competent-fg:   #7ce0aa;  --st-competent-br: #1d5c3c;
+    --st-trainer-bg:     #0f4a2d;  --st-trainer-fg:     #9ef0c4;  --st-trainer-br:   #226f46;
+    --st-training-bg:    #43330a;  --st-training-fg:    #f5cd76;  --st-training-br:  #6b5314;
+    --st-assessment-bg:  #14294f;  --st-assessment-fg:  #9cc2f8;  --st-assessment-br:#234477;
+    --st-induction-bg:   #2a2354;  --st-induction-fg:   #bcaff3;  --st-induction-br: #423880;
+    --st-revalidate-bg:  #4a2409;  --st-revalidate-fg:  #f8b782;  --st-revalidate-br:#743c14;
+    --st-suspended-bg:   #4d1119;  --st-suspended-fg:   #f9a3ae;  --st-suspended-br: #7a1e2b;
+    --st-none-bg:        #1c2025;  --st-none-fg:        #5d6871;  --st-none-br:      #2c3138;
+  }
+}
+
+:root[data-theme="dark"] {
+  --canvas: #121417; --surface: #1a1d21; --surface-sunk: #16181c;
+  --border: #2c3138; --border-strong: #3d444d;
+  --ink: #eceef0; --ink-soft: #b0b9c0; --ink-faint: #84919b;
+  --rail: #0d0f11; --rail-ink: #d5dade; --rail-ink-soft: #7b8792;
+  --rail-hover: #1c2025; --rail-active: #262a30; --accent: #f23449;
+  --st-competent-bg: #123a26; --st-competent-fg: #7ce0aa; --st-competent-br: #1d5c3c;
+  --st-trainer-bg: #0f4a2d; --st-trainer-fg: #9ef0c4; --st-trainer-br: #226f46;
+  --st-training-bg: #43330a; --st-training-fg: #f5cd76; --st-training-br: #6b5314;
+  --st-assessment-bg: #14294f; --st-assessment-fg: #9cc2f8; --st-assessment-br: #234477;
+  --st-induction-bg: #2a2354; --st-induction-fg: #bcaff3; --st-induction-br: #423880;
+  --st-revalidate-bg: #4a2409; --st-revalidate-fg: #f8b782; --st-revalidate-br: #743c14;
+  --st-suspended-bg: #4d1119; --st-suspended-fg: #f9a3ae; --st-suspended-br: #7a1e2b;
+  --st-none-bg: #1c2025; --st-none-fg: #5d6871; --st-none-br: #2c3138;
+}
+
+/* ========================================================================== */
+
+* { box-sizing: border-box; }
+
+html, body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body { margin: 0; font-size: 14px; line-height: 1.5; }
+
+::selection { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Numerals line up in tables and matrix cells */
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* --- Reusable primitives ------------------------------------------------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.card-pad { padding: 1.125rem 1.25rem; }
+
+.hairline { border-color: var(--border); }
+
+.label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  height: 2.25rem; padding: 0 0.875rem;
+  border-radius: 0.4375rem; border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--ink);
+  font-size: 0.8125rem; font-weight: 550; white-space: nowrap;
+  cursor: pointer; transition: background 120ms ease, border-color 120ms ease;
+}
+.btn:hover { background: var(--surface-sunk); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+.btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
+
+.input {
+  width: 100%; height: 2.375rem; padding: 0 0.75rem;
+  border: 1px solid var(--border-strong); border-radius: 0.4375rem;
+  background: var(--surface); color: var(--ink); font-size: 0.875rem;
+}
+.input::placeholder { color: var(--ink-faint); }
+
+/* --- Matrix -------------------------------------------------------------- */
+
+.matrix-wrap {
+  overflow: auto;
+  max-height: calc(100vh - 15rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.matrix { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
+
+.matrix thead th {
+  position: sticky; top: 0; z-index: 3;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-strong);
+  vertical-align: bottom;
+}
+
+/* The name column stays visible while machines scroll horizontally */
+.matrix .name-col {
+  position: sticky; left: 0; z-index: 2;
+  background: var(--surface);
+  border-right: 1px solid var(--border-strong);
+  min-width: 15rem;
+}
+.matrix thead .name-col { z-index: 4; }
+
+.matrix tbody tr:hover .name-col { background: var(--surface-sunk); }
+.matrix tbody tr:hover td { background: color-mix(in srgb, var(--accent) 3%, transparent); }
+
+.cell {
+  width: 3.5rem; height: 3.25rem;
+  padding: 0.25rem;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.chip {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1px;
+  width: 100%; height: 100%;
+  border-radius: 0.375rem;
+  border: 1px solid transparent;
+  font-size: 0.8125rem; font-weight: 700;
+  cursor: pointer;
+  transition: transform 100ms ease, box-shadow 100ms ease;
+}
+.chip:hover { transform: scale(1.06); box-shadow: 0 2px 8px rgb(0 0 0 / 0.14); z-index: 1; position: relative; }
+.chip .sub { font-size: 0.5625rem; font-weight: 600; opacity: 0.75; letter-spacing: 0.02em; }
+
+.st-COMPETENT             { background: var(--st-competent-bg);  color: var(--st-competent-fg);  border-color: var(--st-competent-br); }
+.st-COMPETENT.is-trainer  { background: var(--st-trainer-bg);    color: var(--st-trainer-fg);    border-color: var(--st-trainer-br); }
+.st-IN_TRAINING           { background: var(--st-training-bg);   color: var(--st-training-fg);   border-color: var(--st-training-br); }
+.st-ASSESSMENT            { background: var(--st-assessment-bg); color: var(--st-assessment-fg); border-color: var(--st-assessment-br); }
+.st-INDUCTION             { background: var(--st-induction-bg);  color: var(--st-induction-fg);  border-color: var(--st-induction-br); }
+.st-REQUIRES_REVALIDATION { background: var(--st-revalidate-bg); color: var(--st-revalidate-fg); border-color: var(--st-revalidate-br); }
+.st-SUSPENDED             { background: var(--st-suspended-bg);  color: var(--st-suspended-fg);  border-color: var(--st-suspended-br); }
+.st-NOT_TRAINED           { background: var(--st-none-bg);       color: var(--st-none-fg);       border-color: var(--st-none-br); }
+
+.matrix tfoot td, .matrix tfoot th {
+  position: sticky; bottom: 0; z-index: 3;
+  background: var(--surface);
+  border-top: 1px solid var(--border-strong);
+}
+.matrix tfoot .name-col { z-index: 4; }
+
+/* Rotated machine headers keep the grid narrow enough to read */
+.col-head {
+  height: 12rem; width: 3.5rem; padding: 0 0 0.5rem;
+  position: relative;
+}
+.col-head-inner {
+  position: absolute; bottom: 0.5rem; left: 50%;
+  transform-origin: bottom left;
+  transform: rotate(-60deg);
+  white-space: nowrap;
+  font-size: 0.75rem; font-weight: 600;
+  color: var(--ink-soft);
+  text-align: left;
+}
+
+/* Catches the rotated label of the final column so it isn't clipped. */
+.col-spacer { width: 9rem; border-bottom: 1px solid var(--border); }
+
+@media print {
+  .no-print { display: none !important; }
+  .matrix-wrap { max-height: none; overflow: visible; border: none; }
+  body { background: #fff; }
+}
