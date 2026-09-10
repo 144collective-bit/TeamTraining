@@ -29,13 +29,14 @@ export default async function DashboardPage() {
 
       <div className="p-5 sm:p-7 space-y-6">
         <section aria-label="Summary">
-          <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+          <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
             <Stat label="People" value={stats.people} hint="Active on site" href="/people" />
             <Stat label="Machines" value={stats.machines} hint="In service" href="/machines" />
             <Stat label="Competent" value={stats.competent} tone="good" hint="Signed-off competences" href="/matrix" />
             <Stat label="In training" value={stats.inTraining + stats.inInduction} tone="neutral" hint="Including induction" href="/matrix" />
             <Stat label="Needs action" value={stats.revalidate + stats.suspended} tone={stats.revalidate + stats.suspended > 0 ? "warn" : "neutral"} hint="Expired or suspended" href="/matrix" />
             <Stat label="Single points" value={singlePoints.length} tone={singlePoints.length > 0 ? "bad" : "good"} hint="≤1 competent operator" href="/machines" />
+            <Stat label="To acknowledge" value={stats.pendingAck} tone={stats.pendingAck > 0 ? "warn" : "neutral"} hint="Minor SOP changes unread" href="/matrix" />
           </div>
         </section>
 

@@ -15,7 +15,7 @@ Built as a working example for **Protektor UK** (Kidderminster): 6 press brakes,
 | **Training matrix** | People down the left, machines across the top. Sticky name column and header, per-machine competent-operator count, single-point-of-failure warnings. Selecting an empty cell starts training. |
 | **Daily sign-offs** | The trainer's fast capture screen: pick a trainee, tap a progress rating, confirm the procedure steps covered, save. Pre-ticks what earlier sessions covered so it is confirm-not-enter. |
 | **Competence records** | Status, level, expiry, tri-signature evidence bundle and a verified hash-chained audit trail per person per machine. |
-| **Controlled documents** | SOPs and risk assessments with immutable revisions. Published revisions cannot be edited or deleted — the database rejects it. |
+| **Controlled documents** | SOPs authored as numbered steps, each pairing an instruction with a photograph; risk assessments scored on a 5×5 matrix. Immutable revisions — published ones cannot be edited or deleted, the database rejects it. |
 | **Induction** | Per-person checklist tied to the site risk assessment, with completion timestamps. |
 | **Machines** | Asset detail, authorised operators, linked documents, coverage risk. |
 
@@ -53,6 +53,7 @@ Password `protektor`, shop-floor PIN `1234`. **Demo credentials — replace befo
 | `npm run db:seed` | Reset and reload the example data |
 | `npm run verify` | Verify every hash chain and prove the integrity guards hold |
 | `npm run e2e` | Walk the whole training write path in a browser (needs a running server) |
+| `npm run e2e:authoring` | Walk document authoring and the supersession cascade |
 
 ## How it's built
 
@@ -95,7 +96,10 @@ src/
     schema.ts       Drizzle schema
     seed.ts         The Protektor working example
   lib/
-    commands.ts     Every write: permission check, state machine, transaction
+    commands.ts     Training writes: permission check, state machine, transaction
+    document-commands.ts  Authoring, publishing and the supersession cascade
+    documents.ts    SOP/RA schemas, risk scoring, upload rules
+    attachments.ts  Image upload, de-duplicated and magic-number checked
     state-machine.ts Legal transitions, signature rules, declaration wording
     events.ts       Append-only log: appendEvent, verifyStream
     crypto.ts       scrypt hashing, canonical JSON, SHA-256
@@ -107,6 +111,7 @@ scripts/
   verify-integrity.ts
 e2e/
   write-path.mjs    Browser walk of the whole training lifecycle
+  authoring.mjs     Browser walk of authoring and the supersession cascade
 docs/               Research and planning (see docs/README below)
 ```
 
@@ -149,13 +154,53 @@ session and sets the expiry and next review date.
 
 `npm run e2e` walks all of this in a real browser, including PIN rejection.
 
+## Authoring controlled documents
+
+SOPs are written as numbered steps, each with an instruction, its TWI key points
+and reasons, and a photograph of what the operator should be looking at. The
+document renders identically on screen, in the editor's preview, and on an A4
+printout, with the metadata header, the safety-check and care-point strips, and
+an "uncontrolled document if printed" footer.
+
+Risk assessments are hazard rows scored on the standard 5×5 matrix — likelihood ×
+severity, banded low / medium / high / very high — with existing controls, further
+action and a residual score.
+
+**Photographs** are uploaded through the editor and stored in the database, not a
+bucket, so a database backup is a complete backup of the evidence. They are
+content-addressed and de-duplicated, and the hash of the image forms part of the
+revision hash: the photographs are part of what a person provably signed against.
+Uploads are sniffed by magic number rather than trusted by declared type, and SVG
+is refused because it can carry script.
+
+**Separation of duties.** Whoever writes a revision cannot approve it — including
+the first issue, which is the revision nobody has ever checked. The rule steps
+aside only when the business genuinely has one manager.
+
+### Publishing, and what it does to everyone already trained
+
+Publishing freezes the revision and supersedes the previous one. The change
+classification then decides what happens to every competence record on that
+machine:
+
+| Class | Effect on trained staff |
+|---|---|
+| Editorial | Nothing. Typos and formatting. |
+| Minor | Stay competent, but owe a read-and-confirm before it clears. |
+| Major | → `REQUIRES_REVALIDATION`. Re-training needed before working unsupervised. |
+| Safety critical | → `SUSPENDED` immediately, with the reason on the record. |
+
+What deliberately does **not** change is the competence record's
+`sopRevisionId` — it keeps pointing at the revision the person actually trained
+against. That is the evidence. What changes is their *status*, which records the
+consequence of the procedure having moved on beneath them.
+
+`npm run e2e:authoring` exercises all of this, including the cascade.
+
 ## Not built yet
 
 Deliberately out of scope for this phase — see [the roadmap](docs/05-roadmap.md):
 
-- **Authoring** — SOPs and risk assessments are seeded, not editable in the app.
-  Creating and revising controlled documents is the next build, and it is what
-  activates the change-classification and re-training triggers.
 - Adding people and machines through the UI
 - Offline capture for the shop floor (planned as a PWA with a local event log)
 - Row-level security policies for true multi-tenant isolation

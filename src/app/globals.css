@@ -272,3 +272,188 @@ body { margin: 0; font-size: 14px; line-height: 1.5; }
   .matrix-wrap { max-height: none; overflow: visible; border: none; }
   body { background: #fff; }
 }
+
+/* ==========================================================================
+   Controlled document layout
+
+   A metadata header, numbered step cards pairing an instruction with a
+   photograph, and the safety strips along the bottom. Two columns on screen
+   and on A4 landscape; one column on a phone and on portrait paper.
+   ========================================================================== */
+
+.doc {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+
+.doc-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--rail);
+  color: #fff;
+}
+.doc-bar h2 {
+  margin: 0;
+  font-size: 0.9375rem; font-weight: 650;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.doc-flag {
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: var(--accent); color: #fff;
+  font-size: 0.6875rem; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.doc-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border-bottom: 1px solid var(--border-strong);
+}
+@media (min-width: 60rem) {
+  .doc-meta { grid-template-columns: 2fr 1fr 1fr 0.7fr 0.8fr; }
+}
+.doc-meta-cell {
+  padding: 0.625rem 1rem;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+.doc-meta-cell:last-child { border-right: 0; }
+.doc-meta-cell dd { margin: 0; overflow-wrap: anywhere; }
+@media (min-width: 60rem) {
+  .doc-meta-cell { border-bottom: 0; }
+}
+
+.doc-preamble {
+  display: grid; gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--surface-sunk);
+}
+@media (min-width: 48rem) {
+  .doc-preamble { grid-template-columns: 1.4fr 1fr 1fr; gap: 1.5rem; }
+}
+
+.doc-tags { display: flex; flex-wrap: wrap; gap: 0.3125rem; margin: 0.375rem 0 0; padding: 0; list-style: none; }
+.doc-tag {
+  padding: 0.1875rem 0.5rem;
+  border: 1px solid var(--border-strong); border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.75rem;
+}
+.doc-tag.is-hazard {
+  background: var(--st-suspended-bg);
+  color: var(--st-suspended-fg);
+  border-color: var(--st-suspended-br);
+}
+
+.doc-steps {
+  display: grid; gap: 0;
+  margin: 0; padding: 0; list-style: none;
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 56rem) {
+  .doc-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Keep a vertical rule between the two columns without a trailing edge. */
+  .doc-step:nth-child(odd) { border-right: 1px solid var(--border); }
+}
+
+.doc-step { border-bottom: 1px solid var(--border); padding: 0.875rem 1rem 1rem; }
+
+.doc-step-head { margin-bottom: 0.5rem; }
+.doc-step-no {
+  display: inline-block;
+  padding: 0.1875rem 0.625rem;
+  border-radius: 999px;
+  background: var(--accent); color: #fff;
+  font-size: 0.6875rem; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+
+.doc-step-body { display: grid; gap: 0.75rem; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 30rem) {
+  .doc-step-body { grid-template-columns: minmax(0, 1fr) 11rem; }
+}
+.doc-step-text { min-width: 0; }
+
+.doc-step-figure { margin: 0; min-width: 0; }
+.doc-step-figure img {
+  display: block; width: 100%; height: 8.25rem;
+  object-fit: cover;
+  border: 1px solid var(--border-strong); border-radius: 0.375rem;
+  background: var(--surface-sunk);
+}
+.doc-step-figure figcaption {
+  margin-top: 0.3125rem;
+  font-size: 0.6875rem; line-height: 1.35;
+  color: var(--ink-faint);
+}
+.doc-step-nophoto {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.25rem;
+  height: 8.25rem;
+  border: 1px dashed var(--border-strong); border-radius: 0.375rem;
+  background: var(--surface-sunk);
+  color: var(--ink-faint);
+  font-size: 0.6875rem;
+}
+
+.doc-strips { display: grid; grid-template-columns: minmax(0, 1fr); border-top: 1px solid var(--border-strong); }
+@media (min-width: 48rem) { .doc-strips { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.doc-strip {
+  display: flex; align-items: baseline; gap: 0.625rem;
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.doc-strip.is-safety { background: var(--st-competent-bg); color: var(--st-competent-fg); }
+.doc-strip.is-care   { background: var(--st-suspended-bg);  color: var(--st-suspended-fg); }
+.doc-strip-label {
+  flex-shrink: 0;
+  font-size: 0.6875rem; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.doc-strip-text { font-size: 0.8125rem; line-height: 1.4; }
+
+.doc-foot {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.6875rem;
+  color: var(--ink-faint);
+}
+.doc-foot-warn { letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; }
+
+/* --- Risk assessment table ---------------------------------------------- */
+
+.ra-table { width: 100%; border-collapse: collapse; font-size: 0.78125rem; }
+.ra-table th {
+  padding: 0.5rem 0.625rem; text-align: left; vertical-align: bottom;
+  border-bottom: 1px solid var(--border-strong);
+  font-size: 0.6875rem; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.ra-table td {
+  padding: 0.625rem; vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+.ra-score {
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  padding: 0.1875rem 0.5rem;
+  border: 1px solid; border-radius: 999px;
+  font-size: 0.6875rem; font-weight: 700; white-space: nowrap;
+}
+
+@media print {
+  .doc { border: 1px solid #999; break-inside: auto; }
+  .doc-bar { background: #222 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .doc-step { break-inside: avoid; page-break-inside: avoid; }
+  .doc-strip, .doc-tag, .doc-step-no { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .ra-table tr { break-inside: avoid; page-break-inside: avoid; }
+  @page { size: A4 landscape; margin: 10mm; }
+}

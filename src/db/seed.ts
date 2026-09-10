@@ -9,12 +9,20 @@ import { db, schema } from "./index";
 import { hashSecret, contentHash } from "@/lib/crypto";
 import { appendEvent } from "@/lib/events";
 import { sql } from "drizzle-orm";
+import { placeholderPng } from "./placeholder-image";
 
-type SopBody = {
+type SeedStep = {
+  step: string;
+  keyPoints: string[];
+  reasons: string[];
+};
+type SeedSop = {
   purpose: string;
   ppe: string[];
   hazards: string[];
-  steps: { step: string; keyPoints: string[]; reasons: string[] }[];
+  safetyCheck: string;
+  carePoint: string;
+  steps: SeedStep[];
 };
 
 function iso(daysAgo: number) {
@@ -53,13 +61,49 @@ function hash(c: { user: string; machine: string }): number {
   return h;
 }
 
+
+/**
+ * Stores (or reuses) one of four placeholder images. De-duplicated by content
+ * hash, exactly as a real upload would be.
+ */
+async function placeholderAttachment(
+  tenantId: string,
+  uploadedBy: string,
+  variant: number,
+): Promise<string> {
+  const png = placeholderPng(640, 480, variant);
+  const hash = contentHash(png.toString("base64"));
+
+  const [existing] = await db
+    .select({ id: schema.attachments.id })
+    .from(schema.attachments)
+    .where(sql`tenant_id = ${tenantId} and sha256 = ${hash}`)
+    .limit(1);
+  if (existing) return existing.id;
+
+  const [created] = await db
+    .insert(schema.attachments)
+    .values({
+      tenantId,
+      sha256: hash,
+      mimeType: "image/png",
+      byteSize: png.byteLength,
+      filename: `placeholder-${variant}.png`,
+      data: png,
+      uploadedBy,
+    })
+    .returning({ id: schema.attachments.id });
+  return created.id;
+}
+
 async function main() {
   console.log("Clearing existing data...");
   // Order matters: events references tenants with onDelete restrict.
   await db.execute(sql`
     TRUNCATE TABLE events, signatures, daily_sign_offs, training_sessions,
       assessments, induction_items, inductions, competence_records,
-      document_revisions, documents, machines, areas, auth_sessions, users, tenants
+      document_revisions, documents, attachments, machines, areas,
+      auth_sessions, users, tenants
     RESTART IDENTITY CASCADE
   `);
 
@@ -159,9 +203,11 @@ async function main() {
   /* ---------------------------------------------------------------- *
    * Controlled documents - one SOP and one risk assessment per machine
    * ---------------------------------------------------------------- */
-  const sopBodies: Record<string, SopBody> = {
+  const sopBodies: Record<string, SeedSop> = {
     PRESS_BRAKE: {
       purpose: "Safe setting and operation of the hydraulic press brake for forming sheet and section.",
+      safetyCheck: "Guarding and light curtain tested, e-stops proven, bed clear of tools before the first stroke.",
+      carePoint: "Never reach into the tool area without isolating first — the ram does not care that you are quick.",
       ppe: ["Safety footwear", "Cut-resistant gloves (handling only)", "Eye protection", "Hi-vis"],
       hazards: ["Crushing between tools", "Trapping at the back gauge", "Manual handling of sheet", "Falling tooling"],
       steps: [
@@ -175,6 +221,8 @@ async function main() {
     },
     PUNCH: {
       purpose: "Safe setting and operation of the CNC turret punch press.",
+      safetyCheck: "Guarding in place, slug tray empty, air pressure correct and clamps clear of the tool path.",
+      carePoint: "Check punch-to-die clearance against material thickness. Wrong clearance destroys tooling in one hit.",
       ppe: ["Safety footwear", "Eye protection", "Hearing protection", "Cut-resistant gloves (handling only)"],
       hazards: ["Crushing at the ram", "Trapping at the clamps", "Noise", "Sharp slugs and edges"],
       steps: [
@@ -188,6 +236,8 @@ async function main() {
     },
     LASER: {
       purpose: "Safe operation of the fibre laser cutting machine.",
+      safetyCheck: "Enclosure interlocks proven, extraction running, fire suppression in date before any beam on.",
+      carePoint: "Never defeat an interlock. Watch the slat bed for fire throughout the nest.",
       ppe: ["Safety footwear", "Eye protection", "Hi-vis", "Heat-resistant gloves (part removal)"],
       hazards: ["Laser radiation", "Fume and particulate", "Hot parts and dross", "Fire", "Crushing at the pallet changer"],
       steps: [
@@ -201,6 +251,8 @@ async function main() {
     },
     WELDING: {
       purpose: "Safe MIG/TIG welding of fabricated steel assemblies in the welding bay.",
+      safetyCheck: "Leads and torch checked, extraction at the arc, screens positioned, extinguisher present and in date.",
+      carePoint: "Local extraction is mandatory, not optional — welding fume is a known carcinogen.",
       ppe: ["Welding helmet to correct shade", "Flame-retardant overalls", "Welding gauntlets", "Safety footwear", "Respiratory protection where directed"],
       hazards: ["Arc eye", "Welding fume", "Burns and hot metal", "Fire", "Electric shock", "Compressed gas cylinders"],
       steps: [
@@ -214,21 +266,33 @@ async function main() {
     },
   };
 
+  // Likelihood and severity are seeded deterministically from the hazard text
+  // so the example shows a realistic spread of risk bands rather than one value.
   const raBody = (m: string, hazards: string[]) => ({
     scope: `Routine operation of ${m}, including setting, running and cleaning down.`,
     assessedBy: "Karen Bhatti",
-    hazards: hazards.map((h) => ({
-      hazard: h,
-      whoAtRisk: "Operators, trainees, passing staff",
-      existingControls: [
-        "Fixed and interlocked guarding",
-        "SOP followed; trained and signed-off operators only",
-        "PPE issued and worn",
-        "Planned maintenance regime",
-      ],
-      riskRating: "Medium",
-      furtherAction: "Refresher briefing at quarterly review",
-    })),
+    hazards: hazards.map((h, i) => {
+      const likelihood = 2 + ((h.length + i) % 3);
+      const severity = 3 + ((h.length + i * 2) % 3);
+      return {
+        hazard: h,
+        whoAtRisk: "Operators, trainees, passing staff",
+        existingControls: [
+          "Fixed and interlocked guarding",
+          "SOP followed; trained and signed-off operators only",
+          "PPE issued and worn",
+          "Planned maintenance regime",
+        ],
+        likelihood,
+        severity,
+        furtherAction:
+          likelihood * severity >= 10
+            ? "Re-brief at quarterly review; confirm guarding check on the daily start-up sheet."
+            : "Monitor at quarterly review.",
+        residualLikelihood: Math.max(1, likelihood - 1),
+        residualSeverity: severity,
+      };
+    }),
   });
 
   const sopFor = (code: string) =>
@@ -251,7 +315,30 @@ async function main() {
       ownerId: prodMgr.id, reviewMonths: 12,
     }).returning();
 
-    const body = sopFor(m.code);
+    const seed = sopFor(m.code);
+
+    // One placeholder photograph per step. Content-addressed, so the four
+    // variants are stored once each and shared across every procedure.
+    const steps = [];
+    for (const [i, step] of seed.steps.entries()) {
+      const imageId = await placeholderAttachment(tenantId, prodMgr.id, i);
+      steps.push({
+        instruction: step.step,
+        keyPoints: step.keyPoints,
+        reasons: step.reasons,
+        imageId,
+        imageCaption: `Placeholder — replace with a photograph of ${m.name.toLowerCase()} at this step.`,
+      });
+    }
+
+    const body = {
+      purpose: seed.purpose,
+      ppe: seed.ppe,
+      hazards: seed.hazards,
+      safetyCheck: seed.safetyCheck,
+      carePoint: seed.carePoint,
+      steps,
+    };
     const hash = contentHash(body);
     const [sopRev] = await db.insert(schema.documentRevisions).values({
       tenantId, documentId: sopDoc.id, revision: 3, status: "PUBLISHED",
@@ -290,9 +377,9 @@ async function main() {
     scope: "General site induction: traffic, emergency procedures, manual handling, PPE.",
     assessedBy: "David Whitfield",
     hazards: [
-      { hazard: "Site traffic and FLT movement", whoAtRisk: "All staff and visitors", existingControls: ["Marked pedestrian routes", "Hi-vis mandatory", "FLT segregation"], riskRating: "Medium", furtherAction: "Induction briefing" },
-      { hazard: "Manual handling of sheet and section", whoAtRisk: "Operators", existingControls: ["Lifting aids provided", "Two-person lift policy", "Manual handling training"], riskRating: "Medium", furtherAction: "Refresher every 24 months" },
-      { hazard: "Noise", whoAtRisk: "Shop floor staff", existingControls: ["Hearing protection zones signed", "PPE issued", "Health surveillance"], riskRating: "Medium", furtherAction: "Annual audiometry" },
+      { hazard: "Site traffic and FLT movement", whoAtRisk: "All staff and visitors", existingControls: ["Marked pedestrian routes", "Hi-vis mandatory", "FLT segregation"], likelihood: 3, severity: 5, furtherAction: "Induction briefing before first entry to the shop floor.", residualLikelihood: 2, residualSeverity: 5 },
+      { hazard: "Manual handling of sheet and section", whoAtRisk: "Operators", existingControls: ["Lifting aids provided", "Two-person lift policy", "Manual handling training"], likelihood: 4, severity: 3, furtherAction: "Refresher every 24 months.", residualLikelihood: 2, residualSeverity: 3 },
+      { hazard: "Noise", whoAtRisk: "Shop floor staff", existingControls: ["Hearing protection zones signed", "PPE issued", "Health surveillance"], likelihood: 4, severity: 2, furtherAction: "Annual audiometry.", residualLikelihood: 2, residualSeverity: 2 },
     ],
   };
   const [siteRaDoc] = await db.insert(schema.documents).values({

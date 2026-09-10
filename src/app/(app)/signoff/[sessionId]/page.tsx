@@ -5,10 +5,9 @@ import { getSessionForCapture } from "@/lib/queries";
 import { atLeast } from "@/lib/state-machine";
 import { SignOffForm } from "@/components/sign-off-form";
 import { formatDate } from "@/lib/competence";
+import { readSop } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
-
-type SopBody = { steps?: { step: string; keyPoints: string[] }[] };
 
 export default async function CapturePage({
   params,
@@ -24,9 +23,11 @@ export default async function CapturePage({
   const canRecord =
     session.trainerId === user.id || atLeast(user.role as never, "MANAGER");
 
-  const steps = ((session.sopBody as SopBody | null)?.steps ?? []).map((s, i) => ({
+  // Read through the shared parser so the capture screen cannot drift from the
+  // document schema the way it did when steps gained photographs.
+  const steps = readSop(session.sopBody).steps.map((s, i) => ({
     number: i + 1,
-    label: s.step,
+    label: s.instruction,
   }));
 
   // Pre-tick what has already been covered, so the trainer confirms rather

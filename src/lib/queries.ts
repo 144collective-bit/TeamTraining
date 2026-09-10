@@ -160,6 +160,7 @@ export async function getDashboard(tenantId: string) {
       suspended: sql<number>`count(*) filter (where ${schema.competenceRecords.status} = 'SUSPENDED')`.mapWith(Number),
       expiringSoon: sql<number>`count(*) filter (where ${schema.competenceRecords.status} = 'COMPETENT' and ${schema.competenceRecords.expiresOn} is not null and ${schema.competenceRecords.expiresOn} < current_date + interval '60 days')`.mapWith(Number),
       reviewsDue: sql<number>`count(*) filter (where ${schema.competenceRecords.nextReviewDue} is not null and ${schema.competenceRecords.nextReviewDue} < current_date)`.mapWith(Number),
+      pendingAck: sql<number>`count(*) filter (where ${schema.competenceRecords.ackRequiredRevisionId} is not null)`.mapWith(Number),
     })
     .from(schema.competenceRecords)
     .where(eq(schema.competenceRecords.tenantId, tenantId));
@@ -423,6 +424,7 @@ export async function getCompetence(tenantId: string, competenceId: string) {
       suspensionReason: schema.competenceRecords.suspensionReason,
       sopContentHash: schema.competenceRecords.sopContentHash,
       sopRevisionId: schema.competenceRecords.sopRevisionId,
+      ackRequiredRevisionId: schema.competenceRecords.ackRequiredRevisionId,
       userId: schema.users.id,
       userName: schema.users.name,
       employeeRef: schema.users.employeeRef,
@@ -505,9 +507,27 @@ export async function getCompetence(tenantId: string, competenceId: string) {
     .where(eq(schema.assessments.competenceId, competenceId))
     .orderBy(desc(schema.assessments.assessedAt));
 
+  // A minor revision leaves people competent but owing a read-and-confirm.
+  const ackRequired = record.ackRequiredRevisionId
+    ? (
+        await db
+          .select({
+            revisionId: schema.documentRevisions.id,
+            revision: schema.documentRevisions.revision,
+            changeSummary: schema.documentRevisions.changeSummary,
+            documentId: schema.documents.id,
+            reference: schema.documents.reference,
+          })
+          .from(schema.documentRevisions)
+          .innerJoin(schema.documents, eq(schema.documentRevisions.documentId, schema.documents.id))
+          .where(eq(schema.documentRevisions.id, record.ackRequiredRevisionId))
+          .limit(1)
+      )[0] ?? null
+    : null;
+
   const openSession = sessions.find((s) => !s.completedOn) ?? null;
 
-  return { record, signatures: sigs, sessions, signOffs, assessments: assessmentRows, openSession };
+  return { record, signatures: sigs, sessions, signOffs, assessments: assessmentRows, openSession, ackRequired };
 }
 
 /* ------------------------------------------------------------------ *

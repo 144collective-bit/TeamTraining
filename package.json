@@ -13,7 +13,8 @@
     "db:seed": "tsx --tsconfig tsconfig.json src/db/seed.ts",
     "db:reset": "tsx src/db/reset.ts",
     "verify": "tsx --tsconfig tsconfig.json scripts/verify-integrity.ts",
-    "e2e": "node e2e/write-path.mjs"
+    "e2e": "node e2e/write-path.mjs",
+    "e2e:authoring": "node e2e/authoring.mjs"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

@@ -8,6 +8,7 @@ import { PrintButton } from "@/components/print-button";
 import { StatusPill } from "@/components/status-pill";
 import { formatDate, formatDateTime, daysUntil, type Status, type Level } from "@/lib/competence";
 import { CompetenceActions, VoidSignOff } from "@/components/competence-actions";
+import { AcknowledgeBanner } from "@/components/acknowledge-banner";
 import { atLeast } from "@/lib/state-machine";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ export default async function CompetencePage({ params }: { params: Promise<{ id:
   const data = await getCompetence(user.tenantId, id);
   if (!data) notFound();
 
-  const { record, signatures, sessions, signOffs, assessments, openSession } = data;
+  const { record, signatures, sessions, signOffs, assessments, openSession, ackRequired } = data;
   const canManage = atLeast(user.role as never, "MANAGER");
   const canTrain =
     atLeast(user.role as never, "TRAINER") || record.trainerId === user.id;
@@ -42,6 +43,18 @@ export default async function CompetencePage({ params }: { params: Promise<{ id:
       />
 
       <div className="p-5 sm:p-7 space-y-6">
+        {ackRequired && (
+          <AcknowledgeBanner
+            competenceId={record.id}
+            documentId={ackRequired.documentId}
+            reference={ackRequired.reference}
+            revision={ackRequired.revision}
+            changeSummary={ackRequired.changeSummary}
+            personName={record.userName}
+            canConfirm={record.userId === user.id || canManage}
+          />
+        )}
+
         {record.suspensionReason && (
           <div
             className="card px-4 py-3"

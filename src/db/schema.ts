@@ -12,6 +12,12 @@ import {
   pgEnum,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+import { customType } from "drizzle-orm/pg-core";
+
+/** Postgres bytea <-> Node Buffer. */
+const customBytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "bytea",
+});
 
 /* ------------------------------------------------------------------ *
  * Enums
@@ -246,6 +252,33 @@ export const documentRevisions = pgTable(
   ],
 );
 
+/**
+ * Step photographs and other uploads.
+ *
+ * Stored in the database rather than on disk so that a backup of the database
+ * is a complete backup of the evidence - a training record that references a
+ * photo which has since vanished from a bucket is not evidence.
+ *
+ * Content-addressed: the same image uploaded twice is stored once, and the
+ * hash is what the SOP revision references, so the images form part of what a
+ * person provably signed against.
+ */
+export const attachments = pgTable(
+  "attachments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    sha256: text("sha256").notNull(),
+    mimeType: text("mime_type").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    filename: text("filename"),
+    data: customBytea("data").notNull(),
+    uploadedBy: uuid("uploaded_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("attachments_tenant_sha_idx").on(t.tenantId, t.sha256)],
+);
+
 /* ------------------------------------------------------------------ *
  * Training matrix
  * ------------------------------------------------------------------ */
@@ -276,6 +309,11 @@ export const competenceRecords = pgTable(
     lastReviewOn: date("last_review_on"),
     nextReviewDue: date("next_review_due"),
     suspensionReason: text("suspension_reason"),
+    /**
+     * Set when a MINOR revision supersedes what this person trained on: they
+     * stay competent but must read and confirm the change.
+     */
+    ackRequiredRevisionId: uuid("ack_required_revision_id"),
     notes: text("notes"),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

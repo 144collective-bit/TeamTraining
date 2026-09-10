@@ -3,12 +3,14 @@ import { requireUser } from "@/lib/session";
 import { getDocuments } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
 import { formatDate, daysUntil, DOC_KIND_META } from "@/lib/competence";
+import { atLeast } from "@/lib/state-machine";
 
 export const dynamic = "force-dynamic";
 
 export default async function DocumentsPage() {
   const user = await requireUser();
   const docs = await getDocuments(user.tenantId);
+  const canEdit = atLeast(user.role as never, "MANAGER");
 
   const groups = docs.reduce<Record<string, typeof docs>>((acc, d) => {
     (acc[d.kind] ??= []).push(d);
@@ -23,6 +25,11 @@ export default async function DocumentsPage() {
         eyebrow="Records"
         title="Controlled documents"
         description="Standard operating procedures and risk assessments. Every revision is frozen once published, so a training record always points at exactly what was read."
+        actions={
+          canEdit ? (
+            <Link href="/documents/new" className="btn btn-primary">New document</Link>
+          ) : null
+        }
       />
       <div className="p-5 sm:p-7 space-y-7">
         {order.filter((k) => groups[k]?.length).map((kind) => (
@@ -63,7 +70,9 @@ export default async function DocumentsPage() {
                             <span className="text-[var(--ink-faint)]">Site-wide</span>
                           )}
                         </td>
-                        <td className="py-2.5 text-center tabular font-medium">{d.revision ?? "—"}</td>
+                        <td className="py-2.5 text-center tabular font-medium">
+                          {d.revision ?? <span className="text-[var(--ink-faint)]">Draft</span>}
+                        </td>
                         <td className="py-2.5 text-[var(--ink-soft)] tabular">{formatDate(d.publishedAt)}</td>
                         <td className="py-2.5 pr-5 tabular">
                           <span style={{ color: due !== null && due < 60 ? "var(--st-revalidate-fg)" : "var(--ink-soft)" }}>
