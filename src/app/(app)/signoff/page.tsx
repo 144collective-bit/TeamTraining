@@ -4,12 +4,13 @@ import { getOpenSessions } from "@/lib/queries";
 import { atLeast } from "@/lib/state-machine";
 import { PageHeader } from "@/components/page-header";
 import { formatDate } from "@/lib/competence";
+import { routes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
 
 export default async function SignOffPage() {
   const user = await requireUser();
-  const seeAll = atLeast(user.role as never, "MANAGER");
+  const seeAll = atLeast(user.role, "MANAGER");
   const sessions = await getOpenSessions(user.tenantId, user.id, seeAll);
 
   const outstanding = sessions.filter((s) => !s.signedToday);
@@ -78,7 +79,7 @@ function SessionCard({
   return (
     <li>
       <Link
-        href={`/signoff/${s.sessionId}` as never}
+        href={routes.captureSignOff(s.sessionId)}
         className="card flex items-center gap-4 p-4 transition-colors hover:bg-[var(--surface-sunk)]"
         style={done ? { opacity: 0.7 } : undefined}
       >

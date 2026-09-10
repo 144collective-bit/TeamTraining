@@ -1,5 +1,5 @@
 import { db, schema } from "@/db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { sha256, canonicalJson } from "./crypto";
 import type { PgTransaction } from "drizzle-orm/pg-core";
 
@@ -22,10 +22,24 @@ type Db = typeof db | PgTransaction<any, typeof schema, any>;
  * same stream. The events table rejects UPDATE and DELETE at the database
  * level, so this is the only way records change.
  *
- * Call inside a transaction alongside the projection write, so the log and the
- * read model can never disagree.
+ * MUST be called inside a transaction, alongside the projection write, so the
+ * log and the read model can never disagree.
+ *
+ * Concurrency: reading the last sequence number and inserting the next one is
+ * a read-modify-write, so two simultaneous appends to the same stream would
+ * otherwise collide on the (stream_id, seq) unique index and one would be
+ * rejected. The unique index protects integrity, but losing a trainer's
+ * sign-off because a colleague saved at the same moment is not acceptable.
+ *
+ * A transaction-scoped advisory lock keyed on the stream serialises appends to
+ * that stream only — writes to every other stream proceed in parallel — and
+ * releases automatically on commit or rollback.
  */
 export async function appendEvent(tx: Db, input: EventInput) {
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.streamId}::text, 0))`,
+  );
+
   const [previous] = await tx
     .select({ seq: schema.events.seq, hash: schema.events.hash })
     .from(schema.events)

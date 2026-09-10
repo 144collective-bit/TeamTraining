@@ -99,3 +99,40 @@ CREATE TRIGGER signatures_no_update
 CREATE UNIQUE INDEX IF NOT EXISTS doc_revisions_one_published_idx
   ON document_revisions (document_id)
   WHERE status = 'PUBLISHED';
+
+-- ---------------------------------------------------------------------------
+-- 5. Attachments are immutable.
+--    Rows are content-addressed: the sha256 IS the identity. A SOP revision
+--    references a photograph by id, and the revision hash covers that id — so
+--    if the bytes behind an id could change, the revision hash would still
+--    verify while the procedure people signed against had silently changed.
+--    Replacing a photograph means a new row and a new revision.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION tt_attachments_immutable() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    RAISE EXCEPTION
+      'attachments are immutable: upload a new file instead of altering %', OLD.id
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+
+  -- Deleting an attachment still referenced by a published revision would
+  -- leave a controlled document pointing at nothing.
+  IF EXISTS (
+    SELECT 1 FROM document_revisions r
+    WHERE r.status IN ('PUBLISHED', 'SUPERSEDED')
+      AND r.body::text LIKE '%' || OLD.id::text || '%'
+  ) THEN
+    RAISE EXCEPTION
+      'attachment % is referenced by a published revision and cannot be deleted', OLD.id
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS attachments_immutable ON attachments;
+CREATE TRIGGER attachments_immutable
+  BEFORE UPDATE OR DELETE ON attachments
+  FOR EACH ROW EXECUTE FUNCTION tt_attachments_immutable();

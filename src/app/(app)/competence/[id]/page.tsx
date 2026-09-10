@@ -10,6 +10,7 @@ import { formatDate, formatDateTime, daysUntil, type Status, type Level } from "
 import { CompetenceActions, VoidSignOff } from "@/components/competence-actions";
 import { AcknowledgeBanner } from "@/components/acknowledge-banner";
 import { atLeast } from "@/lib/state-machine";
+import { routes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +21,9 @@ export default async function CompetencePage({ params }: { params: Promise<{ id:
   if (!data) notFound();
 
   const { record, signatures, sessions, signOffs, assessments, openSession, ackRequired } = data;
-  const canManage = atLeast(user.role as never, "MANAGER");
+  const canManage = atLeast(user.role, "MANAGER");
   const canTrain =
-    atLeast(user.role as never, "TRAINER") || record.trainerId === user.id;
+    atLeast(user.role, "TRAINER") || record.trainerId === user.id;
   const [history, integrity] = await Promise.all([streamHistory(id), verifyStream(id)]);
 
   const expiryDays = daysUntil(record.expiresOn);
@@ -32,9 +33,9 @@ export default async function CompetencePage({ params }: { params: Promise<{ id:
       <PageHeader
         eyebrow={
           <>
-            <Link href={`/people/${record.userId}` as never} className="hover:underline">{record.userName}</Link>
+            <Link href={routes.person(record.userId)} className="hover:underline">{record.userName}</Link>
             {" · "}
-            <Link href={`/machines/${record.machineId}` as never} className="font-mono hover:underline">{record.machineCode}</Link>
+            <Link href={routes.machine(record.machineId)} className="font-mono hover:underline">{record.machineCode}</Link>
           </>
         }
         title="Training record"

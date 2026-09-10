@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { uploadAttachment } from "@/lib/attachments";
+import { routes } from "@/lib/routes";
 
 /* ------------------------------------------------------------------ *
  * Tag input - PPE, hazards
@@ -195,7 +196,7 @@ export function ImagePicker({
         <div className="space-y-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`/api/attachments/${imageId}`}
+            src={routes.attachment(imageId)}
             alt={caption ?? `Step ${stepNumber}`}
             className="w-full rounded-md border object-cover"
             style={{ height: "9rem", borderColor: "var(--border-strong)" }}

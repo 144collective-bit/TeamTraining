@@ -5,6 +5,7 @@ import { getMachine } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
 import { StatusPill } from "@/components/status-pill";
 import { formatDate, DOC_KIND_META, type Status, type Level } from "@/lib/competence";
+import { routes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,7 @@ export default async function MachinePage({ params }: { params: Promise<{ id: st
                 {people.map((p) => (
                   <li key={p.id}>
                     <Link
-                      href={`/competence/${p.id}` as never}
+                      href={routes.competence(p.id)}
                       className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 transition-colors hover:bg-[var(--surface-sunk)]"
                     >
                       <span className="min-w-[10rem] flex-1">
@@ -83,7 +84,7 @@ export default async function MachinePage({ params }: { params: Promise<{ id: st
               <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
                 {documents.map((d) => (
                   <li key={d.id}>
-                    <Link href={`/documents/${d.id}` as never} className="block px-5 py-3 transition-colors hover:bg-[var(--surface-sunk)]">
+                    <Link href={routes.document(d.id)} className="block px-5 py-3 transition-colors hover:bg-[var(--surface-sunk)]">
                       <span className="flex items-center gap-2">
                         <span
                           className="rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide"

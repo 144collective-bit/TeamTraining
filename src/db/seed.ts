@@ -6,7 +6,7 @@
  */
 import "dotenv/config";
 import { db, schema } from "./index";
-import { hashSecret, contentHash } from "@/lib/crypto";
+import { hashSecret, contentHash, sha256Bytes } from "@/lib/crypto";
 import { appendEvent } from "@/lib/events";
 import { sql } from "drizzle-orm";
 import { placeholderPng } from "./placeholder-image";
@@ -72,7 +72,7 @@ async function placeholderAttachment(
   variant: number,
 ): Promise<string> {
   const png = placeholderPng(640, 480, variant);
-  const hash = contentHash(png.toString("base64"));
+  const hash = sha256Bytes(png);
 
   const [existing] = await db
     .select({ id: schema.attachments.id })
@@ -94,6 +94,11 @@ async function placeholderAttachment(
     })
     .returning({ id: schema.attachments.id });
   return created.id;
+}
+
+/** appendEvent requires a transaction; the seed appends one event at a time. */
+function emit(input: Parameters<typeof appendEvent>[1]) {
+  return db.transaction((tx) => appendEvent(tx, input));
 }
 
 async function main() {
@@ -502,7 +507,7 @@ async function main() {
 
     competenceIds[`${c.user}|${c.machine}`] = rec.id;
 
-    await appendEvent(db, {
+    await emit({
       tenantId, streamId: rec.id, streamType: "competence_record",
       eventType: "CompetenceRecordCreated",
       payload: { userId: u.id, machineId: m.id, status: c.status, level: c.level },
@@ -511,7 +516,7 @@ async function main() {
     });
 
     if (isCompetent) {
-      await appendEvent(db, {
+      await emit({
         tenantId, streamId: rec.id, streamType: "competence_record",
         eventType: "CompetenceGranted",
         payload: { level: c.level, sopRevisionId: publishedRevisions[c.machine], approvedBy: prodMgr.id },
@@ -537,7 +542,7 @@ async function main() {
     }
 
     if (c.status === "SUSPENDED") {
-      await appendEvent(db, {
+      await emit({
         tenantId, streamId: rec.id, streamType: "competence_record",
         eventType: "CompetenceSuspended",
         payload: { reason: "Risk assessment RA-PB-06 revised: new trapping hazard identified.", changeClass: "SAFETY_CRITICAL" },
@@ -545,7 +550,7 @@ async function main() {
       });
     }
     if (c.status === "REQUIRES_REVALIDATION") {
-      await appendEvent(db, {
+      await emit({
         tenantId, streamId: rec.id, streamType: "competence_record",
         eventType: "RevalidationRequired",
         payload: { reason: "Competence expired against machine revalidation period." },
@@ -597,7 +602,7 @@ async function main() {
       });
     }
 
-    await appendEvent(db, {
+    await emit({
       tenantId, streamId: compId, streamType: "competence_record",
       eventType: "TrainingStarted",
       payload: { trainerId: tr.id, machineId: m.id, sopRevisionId: publishedRevisions[t.machine] },
@@ -634,7 +639,7 @@ async function main() {
     })),
   );
 
-  await appendEvent(db, {
+  await emit({
     tenantId, streamId: induction.id, streamType: "induction",
     eventType: "InductionStarted",
     payload: { userId: aisha.id, trainerId: ian.id },

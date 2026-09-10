@@ -14,7 +14,10 @@
     "db:reset": "tsx src/db/reset.ts",
     "verify": "tsx --tsconfig tsconfig.json scripts/verify-integrity.ts",
     "e2e": "node e2e/write-path.mjs",
-    "e2e:authoring": "node e2e/authoring.mjs"
+    "e2e:authoring": "node e2e/authoring.mjs",
+    "test": "tsx --test --tsconfig tsconfig.json test/*.test.ts",
+    "stress": "tsx --tsconfig tsconfig.json scripts/stress.ts",
+    "check": "npm run typecheck && npm test && npm run verify"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

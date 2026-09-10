@@ -4,8 +4,12 @@ import { getDashboard, getActionList, getActiveTraining, getCoverage } from "@/l
 import { PageHeader } from "@/components/page-header";
 import { Stat } from "@/components/stat";
 import { STATUS_META, formatDate, daysUntil } from "@/lib/competence";
+import { routes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
+
+/** Enough to act on this morning; the rest live on the matrix. */
+const ACTION_LIMIT = 8;
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -29,13 +33,15 @@ export default async function DashboardPage() {
 
       <div className="p-5 sm:p-7 space-y-6">
         <section aria-label="Summary">
-          <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+          <div className="grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <Stat label="People" value={stats.people} hint="Active on site" href="/people" />
             <Stat label="Machines" value={stats.machines} hint="In service" href="/machines" />
             <Stat label="Competent" value={stats.competent} tone="good" hint="Signed-off competences" href="/matrix" />
             <Stat label="In training" value={stats.inTraining + stats.inInduction} tone="neutral" hint="Including induction" href="/matrix" />
             <Stat label="Needs action" value={stats.revalidate + stats.suspended} tone={stats.revalidate + stats.suspended > 0 ? "warn" : "neutral"} hint="Expired or suspended" href="/matrix" />
             <Stat label="Single points" value={singlePoints.length} tone={singlePoints.length > 0 ? "bad" : "good"} hint="≤1 competent operator" href="/machines" />
+            <Stat label="Expiring soon" value={stats.expiringSoon} tone={stats.expiringSoon > 0 ? "warn" : "neutral"} hint="Within 60 days" href="/matrix" />
+            <Stat label="Reviews due" value={stats.reviewsDue} tone={stats.reviewsDue > 0 ? "warn" : "neutral"} hint="Quarterly reviews overdue" href="/matrix" />
             <Stat label="To acknowledge" value={stats.pendingAck} tone={stats.pendingAck > 0 ? "warn" : "neutral"} hint="Minor SOP changes unread" href="/matrix" />
           </div>
         </section>
@@ -51,10 +57,10 @@ export default async function DashboardPage() {
               <Empty>Nothing outstanding. Every competence is current.</Empty>
             ) : (
               <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
-                {actions.map((a) => (
+                {actions.slice(0, ACTION_LIMIT).map((a) => (
                   <li key={a.competenceId}>
                     <Link
-                      href={`/competence/${a.competenceId}` as never}
+                      href={routes.competence(a.competenceId)}
                       className="flex items-start gap-3 px-5 py-3 transition-colors hover:bg-[var(--surface-sunk)]"
                     >
                       <span className={`chip st-${a.status} shrink-0`} style={{ width: "2rem", height: "2rem", fontSize: "0.875rem" }} aria-hidden>
@@ -66,15 +72,22 @@ export default async function DashboardPage() {
                           <span className="font-mono">{a.machineCode}</span>
                         </span>
                         <span className="block text-[12px] text-[var(--ink-soft)] mt-0.5">
-                          {a.suspensionReason ??
-                            (a.expiresOn
-                              ? `Expired ${formatDate(a.expiresOn)} — revalidation required`
-                              : STATUS_META[a.status as keyof typeof STATUS_META].description)}
+                          {describeAction(a)}
                         </span>
                       </span>
                     </Link>
                   </li>
                 ))}
+                {actions.length > ACTION_LIMIT && (
+                  <li>
+                    <Link
+                      href={routes.matrix}
+                      className="block px-5 py-3 text-[12.5px] font-medium text-[var(--ink-soft)] transition-colors hover:bg-[var(--surface-sunk)]"
+                    >
+                      {actions.length - ACTION_LIMIT} more on the training matrix →
+                    </Link>
+                  </li>
+                )}
               </ul>
             )}
           </section>
@@ -92,7 +105,7 @@ export default async function DashboardPage() {
                 {training.map((t) => (
                   <li key={t.sessionId}>
                     <Link
-                      href={`/competence/${t.competenceId}` as never}
+                      href={routes.competence(t.competenceId)}
                       className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-[var(--surface-sunk)]"
                     >
                       <span className="min-w-0 flex-1">
@@ -139,7 +152,7 @@ export default async function DashboardPage() {
                 {coverage.map((c) => (
                   <tr key={c.machineId} className="border-b last:border-0 transition-colors hover:bg-[var(--surface-sunk)]" style={{ borderColor: "var(--border)" }}>
                     <td className="py-2.5 pl-5">
-                      <Link href={`/machines/${c.machineId}` as never} className="hover:underline">
+                      <Link href={routes.machine(c.machineId)} className="hover:underline">
                         <span className="font-mono font-semibold">{c.code}</span>
                         <span className="text-[var(--ink-soft)]"> {c.name}</span>
                       </Link>
@@ -150,7 +163,9 @@ export default async function DashboardPage() {
                     <Td>{c.inTraining}</Td>
                     <Td tone={c.needsAction > 0 ? "warn" : undefined}>{c.needsAction}</Td>
                     <td className="py-2.5 pr-5 text-center">
-                      {c.competent <= 1 ? (
+                      {c.competent === 0 ? (
+                        <Badge tone="bad">No cover</Badge>
+                      ) : c.competent === 1 ? (
                         <Badge tone="bad">Single point</Badge>
                       ) : c.trainers === 0 ? (
                         <Badge tone="warn">No trainer</Badge>
@@ -167,6 +182,30 @@ export default async function DashboardPage() {
       </div>
     </>
   );
+}
+
+/** Why this record is on the manager's list, in plain words. */
+function describeAction(a: Awaited<ReturnType<typeof getActionList>>[number]): string {
+  switch (a.reason) {
+    case "SUSPENDED":
+      return a.suspensionReason ?? "Suspended — not authorised to operate.";
+    case "REVALIDATION": {
+      const lapsed = daysUntil(a.expiresOn);
+      return lapsed !== null && lapsed < 0
+        ? `Lapsed ${formatDate(a.expiresOn)} — re-training required before operating unsupervised.`
+        : "The procedure changed — re-training required before operating unsupervised.";
+    }
+    case "EXPIRING": {
+      const days = daysUntil(a.expiresOn);
+      return days !== null && days >= 0
+        ? `Expires ${formatDate(a.expiresOn)} — ${days} day${days === 1 ? "" : "s"} left.`
+        : `Expired ${formatDate(a.expiresOn)}.`;
+    }
+    case "ACKNOWLEDGEMENT":
+      return "A revised procedure is waiting to be read and confirmed.";
+    case "REVIEW_OVERDUE":
+      return `Quarterly review overdue since ${formatDate(a.nextReviewDue)}.`;
+  }
 }
 
 function greeting() {

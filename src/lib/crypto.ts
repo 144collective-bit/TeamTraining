@@ -35,6 +35,17 @@ export function sha256(input: string): string {
 }
 
 /**
+ * Content address for a binary file.
+ *
+ * Deliberately separate from `contentHash`, which canonicalises JSON and would
+ * wrap a string in quotes before hashing — using the two interchangeably gives
+ * the same bytes two different addresses and silently breaks de-duplication.
+ */
+export function sha256Bytes(bytes: Buffer | Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+/**
  * Stable JSON with sorted object keys. Postgres jsonb does not preserve key
  * order, so anything hashed on write and re-hashed after a read MUST be
  * canonicalised or the two will disagree.

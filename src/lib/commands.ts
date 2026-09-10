@@ -8,50 +8,20 @@ import { requireUser, type SessionUser } from "./session";
 import { appendEvent } from "./events";
 import { verifySecret } from "./crypto";
 import {
-  nextStatus, canTransition, TransitionError, PermissionError,
-  atLeast, missingSignatures, declarationFor,
-  type Transition, type Role, type SignatureRole,
+  nextStatus, canTransition, atLeast, missingSignatures, declarationFor,
+  PermissionError, type Transition, type SignatureRole,
 } from "./state-machine";
+import {
+  fail, requireRole, assertedTime, requestContext, type ActionState,
+} from "./command-support";
+import { today, addMonths } from "./dates";
 import type { Status } from "./competence";
 
-export type ActionState = { error?: string; ok?: string };
+export type { ActionState };
 
 /* ------------------------------------------------------------------ *
- * Shared helpers
+ * Commands
  * ------------------------------------------------------------------ */
-
-function fail(e: unknown): ActionState {
-  if (e instanceof TransitionError || e instanceof PermissionError) {
-    return { error: e.message };
-  }
-  console.error("[command]", e);
-  return { error: "Something went wrong recording that. Nothing was saved." };
-}
-
-function require(role: Role, minimum: Role, what: string) {
-  if (!atLeast(role, minimum)) {
-    throw new PermissionError(`You need ${minimum.toLowerCase()} access to ${what}.`);
-  }
-}
-
-/** Device clock as asserted by the browser, bounded so it cannot be absurd. */
-function assertedTime(raw: FormDataEntryValue | null): Date {
-  const now = Date.now();
-  const parsed = raw ? Date.parse(String(raw)) : NaN;
-  if (Number.isNaN(parsed)) return new Date();
-  // Reject a device clock more than a day out in either direction: record the
-  // server time instead rather than accept an obviously wrong assertion.
-  if (Math.abs(parsed - now) > 86_400_000) return new Date();
-  return new Date(parsed);
-}
-
-async function requestContext() {
-  const h = await headers();
-  return {
-    ip: h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
-    deviceId: h.get("user-agent")?.slice(0, 200) ?? null,
-  };
-}
 
 /** Everything a command needs to know about the record it is acting on. */
 async function loadCompetence(tenantId: string, competenceId: string) {
@@ -109,12 +79,6 @@ function refresh(competenceId: string, userId: string, machineId: string) {
   revalidatePath("/signoff");
 }
 
-function addMonths(from: Date, months: number) {
-  const d = new Date(from);
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return d.toISOString().slice(0, 10);
-}
-const today = () => new Date().toISOString().slice(0, 10);
 
 /* ------------------------------------------------------------------ *
  * Start training  (business plan steps 1-3)
@@ -126,7 +90,7 @@ export async function startTraining(
 ): Promise<ActionState> {
   try {
     const user = await requireUser();
-    require(user.role, "TRAINER", "start training");
+    requireRole(user.role, "TRAINER", "start training");
 
     const userId = String(formData.get("userId") ?? "");
     const machineId = String(formData.get("machineId") ?? "");
@@ -239,7 +203,7 @@ export async function recordSignOff(
 ): Promise<ActionState> {
   try {
     const user = await requireUser();
-    require(user.role, "TRAINER", "record a training sign-off");
+    requireRole(user.role, "TRAINER", "record a training sign-off");
 
     const sessionId = String(formData.get("sessionId") ?? "");
     const rating = Number(formData.get("rating"));
@@ -321,7 +285,7 @@ export async function voidSignOff(
 ): Promise<ActionState> {
   try {
     const user = await requireUser();
-    require(user.role, "TRAINER", "void a sign-off");
+    requireRole(user.role, "TRAINER", "void a sign-off");
 
     const signOffId = String(formData.get("signOffId") ?? "");
     const reason = String(formData.get("reason") ?? "").trim();
@@ -383,7 +347,7 @@ export async function readyForAssessment(
 ): Promise<ActionState> {
   try {
     const user = await requireUser();
-    require(user.role, "TRAINER", "put someone forward for assessment");
+    requireRole(user.role, "TRAINER", "put someone forward for assessment");
 
     const competenceId = String(formData.get("competenceId") ?? "");
     const record = await loadCompetence(user.tenantId, competenceId);
@@ -417,7 +381,7 @@ export async function recordAssessment(
 ): Promise<ActionState> {
   try {
     const user = await requireUser();
-    require(user.role, "TRAINER", "record an assessment");
+    requireRole(user.role, "TRAINER", "record an assessment");
 
     const competenceId = String(formData.get("competenceId") ?? "");
     const passed = formData.get("outcome") === "PASS";
@@ -493,9 +457,16 @@ export async function signCompetence(
     }
 
     // Who is entitled to provide this particular signature.
+    // The trainer signature belongs to the designated trainer. Falling back to
+    // "whoever is clicking" would attribute a signature to the wrong person,
+    // which is the one thing this record exists to get right.
+    if (role === "TRAINER" && !record.trainerId) {
+      return { error: "No designated trainer is recorded, so there is nobody to sign as trainer." };
+    }
+
     const signerId =
       role === "TRAINEE" ? record.userId
-      : role === "TRAINER" ? (record.trainerId ?? user.id)
+      : role === "TRAINER" ? record.trainerId!
       : user.id;
 
     if (role === "MANAGER" && !atLeast(user.role, "MANAGER")) {
@@ -568,16 +539,15 @@ export async function signCompetence(
 
       if (grantsCompetence) {
         const to = nextStatus(record.status as Status, "GRANT_COMPETENCE");
-        const from = new Date();
         await tx
           .update(schema.competenceRecords)
           .set({
             status: to,
             level: "INDEPENDENT",
             competentFrom: today(),
-            expiresOn: record.revalidationMonths ? addMonths(from, record.revalidationMonths) : null,
+            expiresOn: record.revalidationMonths ? addMonths(record.revalidationMonths) : null,
             lastReviewOn: today(),
-            nextReviewDue: addMonths(from, 3),
+            nextReviewDue: addMonths(3),
             approvedBy: user.id,
             updatedAt: new Date(),
           })
@@ -622,7 +592,7 @@ export async function changeStatus(
 ): Promise<ActionState> {
   try {
     const user = await requireUser();
-    require(user.role, "MANAGER", "change a competence status");
+    requireRole(user.role, "MANAGER", "change a competence status");
 
     const competenceId = String(formData.get("competenceId") ?? "");
     const transition = String(formData.get("transition") ?? "") as Transition;
@@ -673,21 +643,20 @@ export async function recordReview(
 ): Promise<ActionState> {
   try {
     const user = await requireUser();
-    require(user.role, "TRAINER", "record a review");
+    requireRole(user.role, "TRAINER", "record a review");
 
     const competenceId = String(formData.get("competenceId") ?? "");
     const outcome = String(formData.get("outcome") ?? "CONFIRMED");
     const note = String(formData.get("note") ?? "").trim() || null;
 
     const record = await loadCompetence(user.tenantId, competenceId);
-    const from = new Date();
 
     await db.transaction(async (tx) => {
       await tx
         .update(schema.competenceRecords)
         .set({
           lastReviewOn: today(),
-          nextReviewDue: addMonths(from, 3),
+          nextReviewDue: addMonths(3),
           status: outcome === "REVALIDATE" ? "REQUIRES_REVALIDATION" : record.status,
           updatedAt: new Date(),
         })
@@ -697,7 +666,7 @@ export async function recordReview(
         tenantId: user.tenantId, streamId: competenceId,
         streamType: "competence_record",
         eventType: "QuarterlyReviewRecorded",
-        payload: { outcome, note, nextReviewDue: addMonths(from, 3) },
+        payload: { outcome, note, nextReviewDue: addMonths(3) },
         actorId: user.id,
       });
     });
@@ -719,7 +688,7 @@ export async function toggleInductionItem(
 ): Promise<ActionState> {
   try {
     const user = await requireUser();
-    require(user.role, "TRAINER", "complete induction items");
+    requireRole(user.role, "TRAINER", "complete induction items");
 
     const itemId = String(formData.get("itemId") ?? "");
     const [item] = await db

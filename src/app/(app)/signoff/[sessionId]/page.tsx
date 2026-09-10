@@ -6,6 +6,7 @@ import { atLeast } from "@/lib/state-machine";
 import { SignOffForm } from "@/components/sign-off-form";
 import { formatDate } from "@/lib/competence";
 import { readSop } from "@/lib/documents";
+import { routes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export default async function CapturePage({
 
   const { session, recent } = data;
   const canRecord =
-    session.trainerId === user.id || atLeast(user.role as never, "MANAGER");
+    session.trainerId === user.id || atLeast(user.role, "MANAGER");
 
   // Read through the shared parser so the capture screen cannot drift from the
   // document schema the way it did when steps gained photographs.
@@ -52,13 +53,13 @@ export default async function CapturePage({
           {session.traineeName}
         </h1>
         <p className="mt-1 text-[14px] text-[var(--ink-soft)]">
-          <Link href={`/machines/${session.machineId}` as never} className="hover:underline">
+          <Link href={routes.machine(session.machineId)} className="hover:underline">
             <span className="font-mono font-medium">{session.machineCode}</span> {session.machineName}
           </Link>
-          {session.sopReference && (
+          {session.sopDocumentId && session.sopReference && (
             <>
               {" · "}
-              <Link href={`/documents/${session.sopDocumentId}` as never} className="hover:underline">
+              <Link href={routes.document(session.sopDocumentId)} className="hover:underline">
                 {session.sopReference} rev {session.sopRevision}
               </Link>
             </>
@@ -118,7 +119,7 @@ export default async function CapturePage({
             ))}
           </ul>
           <Link
-            href={`/competence/${session.competenceId}` as never}
+            href={routes.competence(session.competenceId)}
             className="block px-4 py-2.5 text-[12.5px] font-medium border-t hover:bg-[var(--surface-sunk)]"
             style={{ borderColor: "var(--border)" }}
           >

@@ -3,7 +3,7 @@
 import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { startTraining, type ActionState } from "@/lib/commands";
-import { Banner } from "./sign-off-form";
+import { Banner } from "./banner";
 
 export type Trainer = { id: string; name: string; role: string; machines: string[] };
 

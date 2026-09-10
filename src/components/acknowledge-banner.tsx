@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { acknowledgeRevision } from "@/lib/document-commands";
 import type { ActionState } from "@/lib/commands";
-import { Banner } from "./sign-off-form";
+import { Banner } from "./banner";
+import { routes } from "@/lib/routes";
 
 export function AcknowledgeBanner({
   competenceId,
@@ -39,7 +40,7 @@ export function AcknowledgeBanner({
     >
       <p className="text-[12px] font-bold uppercase tracking-wide">Change to read</p>
       <p className="mt-1 text-[13.5px]">
-        <Link href={`/documents/${documentId}` as never} className="font-semibold underline">
+        <Link href={routes.document(documentId)} className="font-semibold underline">
           {reference} revision {revision}
         </Link>{" "}
         supersedes the version {personName} was trained on.

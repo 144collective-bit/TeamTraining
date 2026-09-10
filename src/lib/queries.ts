@@ -1,5 +1,5 @@
 import { db, schema } from "@/db";
-import { eq, and, asc, desc, sql, inArray, isNotNull } from "drizzle-orm";
+import { eq, and, or, asc, desc, sql, inArray, isNotNull } from "drizzle-orm";
 import type { Status, Level } from "./competence";
 
 /* ------------------------------------------------------------------ *
@@ -168,14 +168,24 @@ export async function getDashboard(tenantId: string) {
   return counts;
 }
 
-/** Competences that need a manager to act, most urgent first. */
+export type ActionReason =
+  | "SUSPENDED" | "REVALIDATION" | "EXPIRING" | "REVIEW_OVERDUE" | "ACKNOWLEDGEMENT";
+
+/**
+ * Everything on this tenant that needs a manager to do something, most urgent
+ * first. Suspensions stop production now; a lapsed competence means someone is
+ * working unauthorised; the rest are housekeeping that becomes an audit finding
+ * if left.
+ */
 export async function getActionList(tenantId: string) {
-  return db
+  const rows = await db
     .select({
       competenceId: schema.competenceRecords.id,
       status: schema.competenceRecords.status,
       expiresOn: schema.competenceRecords.expiresOn,
+      nextReviewDue: schema.competenceRecords.nextReviewDue,
       suspensionReason: schema.competenceRecords.suspensionReason,
+      ackRequired: schema.competenceRecords.ackRequiredRevisionId,
       userId: schema.users.id,
       userName: schema.users.name,
       machineId: schema.machines.id,
@@ -185,13 +195,47 @@ export async function getActionList(tenantId: string) {
     .from(schema.competenceRecords)
     .innerJoin(schema.users, eq(schema.competenceRecords.userId, schema.users.id))
     .innerJoin(schema.machines, eq(schema.competenceRecords.machineId, schema.machines.id))
-    .where(
-      and(
-        eq(schema.competenceRecords.tenantId, tenantId),
+    .where(and(
+      eq(schema.competenceRecords.tenantId, tenantId),
+      eq(schema.users.status, "ACTIVE"),
+      or(
         inArray(schema.competenceRecords.status, ["SUSPENDED", "REQUIRES_REVALIDATION"]),
+        isNotNull(schema.competenceRecords.ackRequiredRevisionId),
+        and(
+          eq(schema.competenceRecords.status, "COMPETENT"),
+          isNotNull(schema.competenceRecords.expiresOn),
+          sql`${schema.competenceRecords.expiresOn} < current_date + interval '60 days'`,
+        ),
+        and(
+          eq(schema.competenceRecords.status, "COMPETENT"),
+          isNotNull(schema.competenceRecords.nextReviewDue),
+          sql`${schema.competenceRecords.nextReviewDue} < current_date`,
+        ),
       ),
-    )
-    .orderBy(asc(schema.competenceRecords.status), asc(schema.users.name));
+    ))
+    .orderBy(asc(schema.users.name));
+
+  const PRIORITY: Record<ActionReason, number> = {
+    SUSPENDED: 0, REVALIDATION: 1, EXPIRING: 2, ACKNOWLEDGEMENT: 3, REVIEW_OVERDUE: 4,
+  };
+
+  return rows
+    .map((r) => {
+      const reason: ActionReason =
+        r.status === "SUSPENDED" ? "SUSPENDED"
+        : r.status === "REQUIRES_REVALIDATION" ? "REVALIDATION"
+        : r.ackRequired ? "ACKNOWLEDGEMENT"
+        : r.expiresOn && r.expiresOn < inDays(60) ? "EXPIRING"
+        : "REVIEW_OVERDUE";
+      return { ...r, reason };
+    })
+    .sort((a, b) => PRIORITY[a.reason] - PRIORITY[b.reason] || a.userName.localeCompare(b.userName));
+}
+
+function inDays(n: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
 }
 
 /** Training currently under way, with progress from the daily sign-offs. */
@@ -253,7 +297,7 @@ export async function getPerson(tenantId: string, userId: string) {
     .from(schema.competenceRecords)
     .innerJoin(schema.machines, eq(schema.competenceRecords.machineId, schema.machines.id))
     .innerJoin(schema.areas, eq(schema.machines.areaId, schema.areas.id))
-    .where(eq(schema.competenceRecords.userId, userId))
+    .where(and(eq(schema.competenceRecords.tenantId, tenantId), eq(schema.competenceRecords.userId, userId)))
     .orderBy(asc(schema.machines.sortOrder));
 
   const induction = await db
@@ -264,7 +308,7 @@ export async function getPerson(tenantId: string, userId: string) {
       trainerName: sql<string>`(select name from ${schema.users} t where t.id = ${schema.inductions.trainerId})`,
     })
     .from(schema.inductions)
-    .where(eq(schema.inductions.userId, userId))
+    .where(and(eq(schema.inductions.tenantId, tenantId), eq(schema.inductions.userId, userId)))
     .orderBy(desc(schema.inductions.startedAt))
     .limit(1);
 
@@ -272,7 +316,7 @@ export async function getPerson(tenantId: string, userId: string) {
     ? await db
         .select()
         .from(schema.inductionItems)
-        .where(eq(schema.inductionItems.inductionId, induction[0].id))
+        .where(and(eq(schema.inductionItems.tenantId, tenantId), eq(schema.inductionItems.inductionId, induction[0].id)))
         .orderBy(asc(schema.inductionItems.sortOrder))
     : [];
 
@@ -316,7 +360,7 @@ export async function getMachine(tenantId: string, machineId: string) {
     })
     .from(schema.competenceRecords)
     .innerJoin(schema.users, eq(schema.competenceRecords.userId, schema.users.id))
-    .where(eq(schema.competenceRecords.machineId, machineId))
+    .where(and(eq(schema.competenceRecords.tenantId, tenantId), eq(schema.competenceRecords.machineId, machineId)))
     .orderBy(asc(schema.users.name));
 
   const documents = await getDocumentsForMachine(tenantId, machineId);
@@ -352,7 +396,7 @@ export async function getDocuments(tenantId: string) {
     .orderBy(asc(schema.documents.kind), asc(schema.documents.reference));
 }
 
-export async function getDocumentsForMachine(tenantId: string, machineId: string) {
+async function getDocumentsForMachine(tenantId: string, machineId: string) {
   return db
     .select({
       id: schema.documents.id,
@@ -362,7 +406,7 @@ export async function getDocumentsForMachine(tenantId: string, machineId: string
       ...currentRevision,
     })
     .from(schema.documents)
-    .where(and(eq(schema.documents.machineId, machineId), eq(schema.documents.archived, false)))
+    .where(and(eq(schema.documents.tenantId, tenantId), eq(schema.documents.machineId, machineId), eq(schema.documents.archived, false)))
     .orderBy(asc(schema.documents.kind));
 }
 
@@ -400,7 +444,7 @@ export async function getDocument(tenantId: string, documentId: string) {
       approverName: sql<string | null>`(select name from ${schema.users} u where u.id = ${schema.documentRevisions.approvedBy})`,
     })
     .from(schema.documentRevisions)
-    .where(eq(schema.documentRevisions.documentId, documentId))
+    .where(and(eq(schema.documentRevisions.tenantId, tenantId), eq(schema.documentRevisions.documentId, documentId)))
     .orderBy(desc(schema.documentRevisions.revision));
 
   return { doc, revisions };
@@ -471,7 +515,7 @@ export async function getCompetence(tenantId: string, competenceId: string) {
       trainerName: sql<string>`(select name from ${schema.users} t where t.id = ${schema.trainingSessions.trainerId})`,
     })
     .from(schema.trainingSessions)
-    .where(eq(schema.trainingSessions.competenceId, competenceId))
+    .where(and(eq(schema.trainingSessions.tenantId, tenantId), eq(schema.trainingSessions.competenceId, competenceId)))
     .orderBy(desc(schema.trainingSessions.startedOn));
 
   const signOffs = sessions.length
@@ -490,7 +534,7 @@ export async function getCompetence(tenantId: string, competenceId: string) {
         })
         .from(schema.dailySignOffs)
         .innerJoin(schema.users, eq(schema.dailySignOffs.recordedBy, schema.users.id))
-        .where(inArray(schema.dailySignOffs.trainingSessionId, sessions.map((s) => s.id)))
+        .where(and(eq(schema.dailySignOffs.tenantId, tenantId), inArray(schema.dailySignOffs.trainingSessionId, sessions.map((s) => s.id))))
         .orderBy(desc(schema.dailySignOffs.onDate))
     : [];
 
@@ -504,7 +548,7 @@ export async function getCompetence(tenantId: string, competenceId: string) {
     })
     .from(schema.assessments)
     .innerJoin(schema.users, eq(schema.assessments.assessorId, schema.users.id))
-    .where(eq(schema.assessments.competenceId, competenceId))
+    .where(and(eq(schema.assessments.tenantId, tenantId), eq(schema.assessments.competenceId, competenceId)))
     .orderBy(desc(schema.assessments.assessedAt));
 
   // A minor revision leaves people competent but owing a read-and-confirm.
@@ -520,7 +564,7 @@ export async function getCompetence(tenantId: string, competenceId: string) {
           })
           .from(schema.documentRevisions)
           .innerJoin(schema.documents, eq(schema.documentRevisions.documentId, schema.documents.id))
-          .where(eq(schema.documentRevisions.id, record.ackRequiredRevisionId))
+          .where(and(eq(schema.documentRevisions.tenantId, tenantId), eq(schema.documentRevisions.id, record.ackRequiredRevisionId)))
           .limit(1)
       )[0] ?? null
     : null;
@@ -625,7 +669,7 @@ export async function getSessionForCapture(tenantId: string, sessionId: string) 
     })
     .from(schema.dailySignOffs)
     .innerJoin(schema.users, eq(schema.dailySignOffs.recordedBy, schema.users.id))
-    .where(eq(schema.dailySignOffs.trainingSessionId, sessionId))
+    .where(and(eq(schema.dailySignOffs.tenantId, tenantId), eq(schema.dailySignOffs.trainingSessionId, sessionId)))
     .orderBy(desc(schema.dailySignOffs.onDate))
     .limit(5);
 

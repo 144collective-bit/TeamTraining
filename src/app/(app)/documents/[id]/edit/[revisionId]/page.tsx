@@ -6,6 +6,7 @@ import { eq, and } from "drizzle-orm";
 import { atLeast } from "@/lib/state-machine";
 import { DocumentEditor } from "@/components/document-editor";
 import { readSop, readRa } from "@/lib/documents";
+import { routes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export default async function EditRevisionPage({
 }) {
   const { id, revisionId } = await params;
   const user = await requireUser();
-  if (!atLeast(user.role as never, "MANAGER")) redirect(`/documents/${id}` as never);
+  if (!atLeast(user.role, "MANAGER")) redirect(routes.document(id));
 
   const [row] = await db
     .select({
@@ -43,14 +44,14 @@ export default async function EditRevisionPage({
 
   if (!row) notFound();
   // A published revision is frozen; there is nothing to edit.
-  if (row.status !== "DRAFT") redirect(`/documents/${id}` as never);
+  if (row.status !== "DRAFT") redirect(routes.document(id));
 
   const isSop = row.kind === "SOP";
 
   return (
     <div className="p-5 sm:p-7 max-w-5xl">
       <Link
-        href={`/documents/${id}` as never}
+        href={routes.document(id)}
         className="inline-flex items-center gap-1.5 text-[13px] text-[var(--ink-soft)] hover:underline"
       >
         <span aria-hidden>←</span> {row.reference}

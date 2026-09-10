@@ -10,6 +10,7 @@ import { ReviseButton } from "@/components/revise-button";
 import { readSop, readRa } from "@/lib/documents";
 import { atLeast } from "@/lib/state-machine";
 import { formatDate, DOC_KIND_META, CHANGE_CLASS_META } from "@/lib/competence";
+import { routes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
   if (!data) notFound();
 
   const { doc, revisions } = data;
-  const canEdit = atLeast(user.role as never, "MANAGER");
+  const canEdit = atLeast(user.role, "MANAGER");
   const isSop = doc.kind === "SOP";
 
   const published = revisions.find((r) => r.status === "PUBLISHED");
@@ -44,7 +45,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
             <span className="font-mono">{doc.reference}</span>
             {" · "}{DOC_KIND_META[doc.kind]?.label ?? doc.kind}
             {doc.machineId && (
-              <> · <Link href={`/machines/${doc.machineId}` as never} className="hover:underline">{doc.machineCode}</Link></>
+              <> · <Link href={routes.machine(doc.machineId)} className="hover:underline">{doc.machineCode}</Link></>
             )}
           </>
         }
@@ -74,7 +75,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
               {canEdit && (
                 <>
                   {" "}
-                  <Link href={`/documents/${doc.id}/edit/${draft.id}` as never} className="font-medium underline">
+                  <Link href={routes.editRevision(doc.id, draft.id)} className="font-medium underline">
                     Continue editing
                   </Link>
                 </>
@@ -116,7 +117,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
                       {r.status}
                     </span>
                     {r.status === "DRAFT" && canEdit && (
-                      <Link href={`/documents/${doc.id}/edit/${r.id}` as never}
+                      <Link href={routes.editRevision(doc.id, r.id)}
                             className="ml-auto text-[11.5px] font-medium underline">
                         Edit
                       </Link>

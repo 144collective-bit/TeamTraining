@@ -48,10 +48,13 @@ Password `protektor`, shop-floor PIN `1234`. **Demo credentials — replace befo
 |---|---|
 | `npm run dev` | Development server |
 | `npm run build` | Production build |
+| `npm run check` | Typecheck, unit tests and integrity verification — the gate before pushing |
 | `npm run typecheck` | TypeScript, no emit |
+| `npm test` | Unit tests for the pure logic (dates, state machine, scoring, hashing) |
+| `npm run stress` | Concurrency and scale checks against a seeded database |
 | `npm run db:push` | Sync schema to the database |
 | `npm run db:seed` | Reset and reload the example data |
-| `npm run verify` | Verify every hash chain and prove the integrity guards hold |
+| `npm run verify` | Verify every hash chain and every photograph, and prove the integrity guards hold |
 | `npm run e2e` | Walk the whole training write path in a browser (needs a running server) |
 | `npm run e2e:authoring` | Walk document authoring and the supersession cascade |
 
@@ -81,6 +84,19 @@ re-authenticated at the point of signing, and both device and server clocks.
 
 **The matrix cell is never a boolean.** It carries status, level, the revision trained
 against, expiry, review dates and a link to the full evidence trail.
+
+**Appends to one stream are serialised.** Reading the last sequence number and
+inserting the next one is a read-modify-write; without a lock, two people saving at
+the same moment collide on the unique index and one write is rejected. A
+transaction-scoped advisory lock keyed on the stream serialises that stream only.
+`npm run stress` proves 25 concurrent appends all commit.
+
+**Attachments are immutable and content-addressed.** A revision references a
+photograph by id and the revision hash covers that id, so if the bytes behind an id
+could change, the revision would still verify while the procedure people signed
+against had silently changed. The database refuses to alter an attachment or delete
+one a published revision still references, and `npm run verify` re-hashes every
+stored image against its recorded address.
 
 ### Layout
 
@@ -197,12 +213,27 @@ consequence of the procedure having moved on beneath them.
 
 `npm run e2e:authoring` exercises all of this, including the cascade.
 
+## Testing
+
+| Layer | What it covers |
+|---|---|
+| `npm test` | Pure logic — date arithmetic, the state machine, risk banding, content hashing, document parsing of older shapes |
+| `npm run verify` | Every hash chain, every photograph's content address, and that each database guard actually refuses what it must |
+| `npm run stress` | Concurrent appends to one stream, matrix cost at 250 people × 60 machines, whole-log verification, concurrent identical uploads |
+| `npm run e2e` | The training lifecycle in a browser, end to end |
+| `npm run e2e:authoring` | Document authoring, separation of duties, and the supersession cascade |
+
+The e2e suites need a running server (`npm run build && npm run start`) and a fresh
+`npm run db:seed`.
+
 ## Not built yet
 
 Deliberately out of scope for this phase — see [the roadmap](docs/05-roadmap.md):
 
 - Adding people and machines through the UI
 - Offline capture for the shop floor (planned as a PWA with a local event log)
-- Row-level security policies for true multi-tenant isolation
+- **Row-level security.** Queries are scoped to the tenant in application code and
+  audited, but the isolation is not yet enforced by the database. That is the right
+  belt-and-braces before a second customer's data is in the same instance.
 - Evidence pack export as PDF/A (the print view is a stand-in)
 - Production target calculator

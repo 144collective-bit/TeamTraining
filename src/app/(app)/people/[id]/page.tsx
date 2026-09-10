@@ -8,6 +8,7 @@ import { StatusPill } from "@/components/status-pill";
 import { formatDate, formatDateTime, daysUntil, type Status, type Level } from "@/lib/competence";
 import { InductionItem } from "@/components/induction-item";
 import { atLeast } from "@/lib/state-machine";
+import { routes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
   if (!data) notFound();
 
   const { person, competences, induction, inductionItems } = data;
-  const canEditInduction = atLeast(user.role as never, "TRAINER");
+  const canEditInduction = atLeast(user.role, "TRAINER");
   const competent = competences.filter((c) => c.status === "COMPETENT");
   const inductionDone = inductionItems.filter((i) => i.completedAt).length;
 
@@ -77,7 +78,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
                 return (
                   <li key={c.id}>
                     <Link
-                      href={`/competence/${c.id}` as never}
+                      href={routes.competence(c.id)}
                       className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 transition-colors hover:bg-[var(--surface-sunk)]"
                     >
                       <span className="min-w-[12rem] flex-1">

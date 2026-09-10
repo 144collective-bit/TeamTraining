@@ -3,6 +3,8 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { recordSignOff, readyForAssessment, type ActionState } from "@/lib/commands";
+import { Banner } from "./banner";
+import { DeviceClock } from "./device-clock";
 
 const RATINGS = [
   { value: 1, label: "Observed only" },
@@ -188,26 +190,4 @@ function ReadyForAssessment({
   );
 }
 
-/** Captures the browser clock at submit time so sync lag is auditable. */
-function DeviceClock() {
-  const [now, setNow] = useState("");
-  useEffect(() => {
-    const tick = () => setNow(new Date().toISOString());
-    tick();
-    const id = setInterval(tick, 30_000);
-    return () => clearInterval(id);
-  }, []);
-  return <input type="hidden" name="occurredAt" value={now} />;
-}
 
-export function Banner({ tone, children }: { tone: "good" | "bad"; children: React.ReactNode }) {
-  const s =
-    tone === "good"
-      ? { background: "var(--st-competent-bg)", color: "var(--st-competent-fg)", borderColor: "var(--st-competent-br)" }
-      : { background: "var(--st-suspended-bg)", color: "var(--st-suspended-fg)", borderColor: "var(--st-suspended-br)" };
-  return (
-    <p role="status" className="rounded-md border px-3 py-2 text-[13px] font-medium" style={s}>
-      {children}
-    </p>
-  );
-}

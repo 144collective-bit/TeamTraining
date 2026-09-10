@@ -27,13 +27,6 @@ export const LEVEL_META: Record<Level, { label: string; abbr: string; rank: numb
   TRAINER:     { label: "Can train others",     abbr: "L4", rank: 4 },
 };
 
-/** Statuses that mean this person may operate the machine right now. */
-export const AUTHORISED: Status[] = ["COMPETENT"];
-
-export function isAuthorised(status: Status) {
-  return AUTHORISED.includes(status);
-}
-
 /** Statuses that need a manager to do something. */
 export function needsAction(status: Status) {
   return status === "REQUIRES_REVALIDATION" || status === "SUSPENDED";

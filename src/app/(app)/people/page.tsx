@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import { eq, and, asc, sql } from "drizzle-orm";
 import { PageHeader } from "@/components/page-header";
 import { formatDate } from "@/lib/competence";
+import { routes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,7 @@ export default async function PeoplePage() {
               {people.map((p) => (
                 <tr key={p.id} className="border-b last:border-0 transition-colors hover:bg-[var(--surface-sunk)]" style={{ borderColor: "var(--border)" }}>
                   <td className="py-2.5 pl-5">
-                    <Link href={`/people/${p.id}` as never} className="group">
+                    <Link href={routes.person(p.id)} className="group">
                       <span className="block font-medium group-hover:underline">{p.name}</span>
                       <span className="block text-[11.5px] text-[var(--ink-faint)] font-mono">{p.employeeRef}</span>
                     </Link>

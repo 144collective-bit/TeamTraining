@@ -3,7 +3,7 @@
 import { db, schema } from "@/db";
 import { eq, and } from "drizzle-orm";
 import { requireUser } from "./session";
-import { sha256 } from "./crypto";
+import { sha256Bytes } from "./crypto";
 import { atLeast, PermissionError } from "./state-machine";
 import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES } from "./documents";
 
@@ -18,7 +18,7 @@ export type UploadResult =
 export async function uploadAttachment(formData: FormData): Promise<UploadResult> {
   try {
     const user = await requireUser();
-    if (!atLeast(user.role as never, "TRAINER")) {
+    if (!atLeast(user.role, "TRAINER")) {
       throw new PermissionError("You need trainer access to add photographs.");
     }
 
@@ -42,7 +42,7 @@ export async function uploadAttachment(formData: FormData): Promise<UploadResult
       return { ok: false, error: "That file does not look like a JPEG, PNG or WebP image." };
     }
 
-    const hash = sha256(buffer.toString("base64"));
+    const hash = sha256Bytes(buffer);
 
     const [existing] = await db
       .select({ id: schema.attachments.id, filename: schema.attachments.filename })

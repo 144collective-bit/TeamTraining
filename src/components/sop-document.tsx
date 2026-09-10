@@ -1,6 +1,7 @@
 import Image from "next/image";
 import type { SopBody } from "@/lib/documents";
 import { formatDate } from "@/lib/competence";
+import { routes } from "@/lib/routes";
 
 export type DocMeta = {
   title: string;
@@ -113,7 +114,7 @@ export function SopDocument({
                   // from our own route, so plain img with object-fit is right.
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={`/api/attachments/${step.imageId}`}
+                    src={routes.attachment(step.imageId)}
                     alt={step.imageCaption ?? `Step ${i + 1}: ${step.instruction}`.slice(0, 120)}
                     // Eager, not lazy: a procedure with six steps is a handful of
                     // small images, and lazily-loaded ones can be missing from a

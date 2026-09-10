@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { randomBytes } from "node:crypto";
 import { db, schema } from "@/db";
 import { eq, and, gt } from "drizzle-orm";
+import type { Role } from "./state-machine";
 
 const COOKIE = "tt_session";
 const TTL_DAYS = 14;
@@ -12,7 +13,7 @@ export type SessionUser = {
   tenantId: string;
   name: string;
   email: string;
-  role: "ADMIN" | "MANAGER" | "TRAINER" | "OPERATOR";
+  role: Role;
   jobTitle: string | null;
 };
 

@@ -4,7 +4,7 @@ import { z } from "zod";
  * Standard operating procedure
  * ------------------------------------------------------------------ */
 
-export const sopStepSchema = z.object({
+const sopStepSchema = z.object({
   /** What the operator does. One instruction per step. */
   instruction: z.string().trim().min(1, "Every step needs an instruction."),
   /** TWI key points: the things that make or break the step. */
@@ -44,7 +44,7 @@ export const EMPTY_SOP: SopBody = {
 
 const score = z.coerce.number().int().min(1).max(5);
 
-export const raHazardSchema = z.object({
+const raHazardSchema = z.object({
   hazard: z.string().trim().min(1, "Name the hazard."),
   whoAtRisk: z.string().trim().default(""),
   existingControls: z.array(z.string().trim().min(1)).default([]),
@@ -116,11 +116,6 @@ export function riskBand(scoreValue: number): RiskBand {
  */
 export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-
-/** Every image referenced by a set of steps, in order, de-duplicated. */
-export function stepImageIds(steps: { imageId?: string | null }[]): string[] {
-  return [...new Set(steps.map((s) => s.imageId).filter((id): id is string => Boolean(id)))];
-}
 
 /* ------------------------------------------------------------------ *
  * Parsing stored bodies

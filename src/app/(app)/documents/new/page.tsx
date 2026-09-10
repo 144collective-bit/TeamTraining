@@ -13,7 +13,7 @@ export default async function NewDocumentPage({
   searchParams: Promise<{ kind?: string; machine?: string }>;
 }) {
   const user = await requireUser();
-  if (!atLeast(user.role as never, "MANAGER")) redirect("/documents");
+  if (!atLeast(user.role, "MANAGER")) redirect("/documents");
 
   const { kind, machine } = await searchParams;
   const { machines } = await getTrainingOptions(user.tenantId);

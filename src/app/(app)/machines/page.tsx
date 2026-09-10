@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { getCoverage } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
+import { routes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,7 @@ export default async function MachinesPage() {
                 return (
                   <Link
                     key={m.machineId}
-                    href={`/machines/${m.machineId}` as never}
+                    href={routes.machine(m.machineId)}
                     className="card card-pad transition-colors hover:bg-[var(--surface-sunk)]"
                   >
                     <div className="flex items-start justify-between gap-3">

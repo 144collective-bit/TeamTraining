@@ -1,4 +1,5 @@
 import type { Status, Level } from "./competence";
+import { userRole } from "@/db/schema";
 
 /**
  * The training lifecycle, as described in the Lean Solutions business plan:
@@ -49,13 +50,6 @@ export function nextStatus(from: Status, transition: Transition): Status {
   return TRANSITIONS[transition].to;
 }
 
-/** What a manager can do to this record right now. */
-export function availableTransitions(status: Status): Transition[] {
-  return (Object.keys(TRANSITIONS) as Transition[]).filter((t) =>
-    canTransition(status, t),
-  );
-}
-
 export class TransitionError extends Error {
   constructor(message: string) {
     super(message);
@@ -101,7 +95,12 @@ export function declarationFor(
  * Who may do what
  * ------------------------------------------------------------------ */
 
-export type Role = "ADMIN" | "MANAGER" | "TRAINER" | "OPERATOR";
+/**
+ * Derived from the database enum so the three places that used to declare this
+ * union independently cannot drift apart. Adding a role to the schema now
+ * breaks the RANK table below until it is ranked, which is the point.
+ */
+export type Role = (typeof userRole.enumValues)[number];
 
 const RANK: Record<Role, number> = { OPERATOR: 0, TRAINER: 1, MANAGER: 2, ADMIN: 3 };
 

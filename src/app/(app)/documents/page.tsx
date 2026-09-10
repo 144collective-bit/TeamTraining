@@ -4,13 +4,14 @@ import { getDocuments } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
 import { formatDate, daysUntil, DOC_KIND_META } from "@/lib/competence";
 import { atLeast } from "@/lib/state-machine";
+import { routes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
 
 export default async function DocumentsPage() {
   const user = await requireUser();
   const docs = await getDocuments(user.tenantId);
-  const canEdit = atLeast(user.role as never, "MANAGER");
+  const canEdit = atLeast(user.role, "MANAGER");
 
   const groups = docs.reduce<Record<string, typeof docs>>((acc, d) => {
     (acc[d.kind] ??= []).push(d);
@@ -56,14 +57,14 @@ export default async function DocumentsPage() {
                     return (
                       <tr key={d.id} className="border-b last:border-0 transition-colors hover:bg-[var(--surface-sunk)]" style={{ borderColor: "var(--border)" }}>
                         <td className="py-2.5 pl-5">
-                          <Link href={`/documents/${d.id}` as never} className="font-mono font-semibold hover:underline">
+                          <Link href={routes.document(d.id)} className="font-mono font-semibold hover:underline">
                             {d.reference}
                           </Link>
                         </td>
                         <td className="py-2.5 text-[var(--ink-soft)]">{d.title}</td>
                         <td className="py-2.5">
                           {d.machineId ? (
-                            <Link href={`/machines/${d.machineId}` as never} className="font-mono text-[12px] hover:underline">
+                            <Link href={routes.machine(d.machineId)} className="font-mono text-[12px] hover:underline">
                               {d.machineCode}
                             </Link>
                           ) : (

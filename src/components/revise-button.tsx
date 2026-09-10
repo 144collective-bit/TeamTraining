@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import Link from "next/link";
 import { createDraftRevision } from "@/lib/document-commands";
 import type { ActionState } from "@/lib/commands";
+import { routes } from "@/lib/routes";
 
 export function ReviseButton({
   documentId,
@@ -18,7 +19,7 @@ export function ReviseButton({
 
   if (hasDraft && draftId) {
     return (
-      <Link href={`/documents/${documentId}/edit/${draftId}` as never} className="btn">
+      <Link href={routes.editRevision(documentId, draftId)} className="btn">
         Continue draft
       </Link>
     );

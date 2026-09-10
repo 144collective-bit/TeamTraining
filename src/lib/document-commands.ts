@@ -8,27 +8,10 @@ import { requireUser } from "./session";
 import { appendEvent } from "./events";
 import { contentHash } from "./crypto";
 import { atLeast, PermissionError } from "./state-machine";
+import { fail, requireRole, type ActionState } from "./command-support";
+import { addMonths } from "./dates";
 import { sopBodySchema, raBodySchema, EMPTY_SOP, EMPTY_RA } from "./documents";
-import type { ActionState } from "./commands";
 
-function fail(e: unknown): ActionState {
-  if (e instanceof PermissionError) return { error: e.message };
-  console.error("[document-command]", e);
-  return { error: "Something went wrong saving that. Nothing was changed." };
-}
-
-function need(role: string, minimum: "TRAINER" | "MANAGER" | "ADMIN", what: string) {
-  if (!atLeast(role as never, minimum)) {
-    throw new PermissionError(`You need ${minimum.toLowerCase()} access to ${what}.`);
-  }
-}
-
-const today = () => new Date().toISOString().slice(0, 10);
-function addMonths(months: number) {
-  const d = new Date();
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return d.toISOString().slice(0, 10);
-}
 
 /* ------------------------------------------------------------------ *
  * Create
@@ -41,7 +24,7 @@ export async function createDocument(
   let target: string | null = null;
   try {
     const user = await requireUser();
-    need(user.role, "MANAGER", "create a controlled document");
+    requireRole(user.role, "MANAGER", "create a controlled document");
 
     const kind = String(formData.get("kind") ?? "SOP");
     const title = String(formData.get("title") ?? "").trim();
@@ -139,7 +122,7 @@ export async function createDraftRevision(
   let target: string | null = null;
   try {
     const user = await requireUser();
-    need(user.role, "MANAGER", "revise a controlled document");
+    requireRole(user.role, "MANAGER", "revise a controlled document");
 
     const documentId = String(formData.get("documentId") ?? "");
 
@@ -194,7 +177,7 @@ export async function saveDraft(
 ): Promise<ActionState> {
   try {
     const user = await requireUser();
-    need(user.role, "MANAGER", "edit a controlled document");
+    requireRole(user.role, "MANAGER", "edit a controlled document");
 
     const revisionId = String(formData.get("revisionId") ?? "");
     const bodyRaw = String(formData.get("body") ?? "");
@@ -277,7 +260,7 @@ export async function publishRevision(
 ): Promise<ActionState> {
   try {
     const user = await requireUser();
-    need(user.role, "MANAGER", "publish a controlled document");
+    requireRole(user.role, "MANAGER", "publish a controlled document");
 
     const revisionId = String(formData.get("revisionId") ?? "");
     const changeClass = String(formData.get("changeClass") ?? "MINOR");
@@ -535,7 +518,7 @@ export async function acknowledgeRevision(
 
     if (!record) return { error: "That record could not be found." };
     if (!record.ackRequiredRevisionId) return { error: "Nothing to acknowledge." };
-    if (record.userId !== user.id && !atLeast(user.role as never, "MANAGER")) {
+    if (record.userId !== user.id && !atLeast(user.role, "MANAGER")) {
       return { error: "Only the operator can confirm they have read the change." };
     }
 
@@ -572,7 +555,7 @@ export async function discardDraft(
   let target: string | null = null;
   try {
     const user = await requireUser();
-    need(user.role, "MANAGER", "discard a draft");
+    requireRole(user.role, "MANAGER", "discard a draft");
 
     const revisionId = String(formData.get("revisionId") ?? "");
     const rev = await loadDraft(user.tenantId, revisionId);

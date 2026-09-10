@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { saveDraft, publishRevision, discardDraft } from "@/lib/document-commands";
 import type { ActionState } from "@/lib/commands";
-import { Banner } from "./sign-off-form";
+import { Banner } from "./banner";
 import { TagInput, ListInput, ImagePicker, Field } from "./editor-bits";
 import { SopDocument } from "./sop-document";
 import { RaDocument } from "./ra-document";
@@ -14,6 +14,7 @@ import {
   LIKELIHOOD_LABELS, SEVERITY_LABELS, riskScore, riskBand,
 } from "@/lib/documents";
 import { CHANGE_CLASS_META } from "@/lib/competence";
+import { routes } from "@/lib/routes";
 
 const PPE_SUGGESTIONS = [
   "Safety footwear", "Eye protection", "Hearing protection", "Cut-resistant gloves",
@@ -574,7 +575,7 @@ function PublishPanel({
           <button type="submit" className="btn btn-primary" disabled={publishing || !summary.trim()}>
             {publishing ? "Publishing…" : `Publish revision ${meta.revision}`}
           </button>
-          <Link href={`/documents/${meta.documentId}` as never} className="btn">Back to document</Link>
+          <Link href={routes.document(meta.documentId)} className="btn">Back to document</Link>
         </div>
       </form>
 

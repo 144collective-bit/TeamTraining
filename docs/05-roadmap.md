@@ -1,5 +1,34 @@
 # 05 — Roadmap
 
+## Build status
+
+Phase 1 is largely built. What follows is the original plan; this table is the
+honest position against it, kept here so the roadmap and the code do not drift.
+
+| Phase 1 item | Status |
+|---|---|
+| Tenant, area, person, role structure | Built |
+| Machine register (the matrix axis) | Built |
+| SOP authoring — immutable revisions, content hashing, approver ≠ author | Built |
+| Risk assessment authoring — same revision model, 5×5 scoring | Built |
+| Training matrix — state machine, levels, expiry, revalidation | Built |
+| Induction workflow with RA acknowledgement | Built |
+| Daily training sign-off, mobile, <30 seconds | Built (online only) |
+| Assessment and tri-signature competence approval | Built |
+| Signature evidence bundles with re-authentication | Built |
+| Append-only event log with hash chain and `verify` | Built |
+| SOP revision → automatic re-training trigger, four change classes | Built |
+| Quarterly review with recorded outcome | Built |
+| Manager dashboard — coverage, gaps, expiries, single points | Built |
+| Offline capture (PWA with a local event log) | **Not built** |
+| One-click evidence pack (PDF/A + JSON sidecar) | **Not built** — print view is a stand-in |
+| Row-level security policies | **Not built** — queries are scoped in application code |
+| Adding people and machines through the UI | **Not built** — seeded only |
+
+Phases 2–4 below are untouched.
+
+---
+
 ## Sequencing principle
 
 The business plan describes three products' worth of scope. Building them in parallel

@@ -8,6 +8,7 @@ import {
   STATUS_META, LEVEL_META, formatDate, daysUntil,
   type Status, type Level,
 } from "@/lib/competence";
+import { routes } from "@/lib/routes";
 
 type Filter = "ALL" | "GAPS" | "ACTION" | "TRAINING";
 
@@ -67,11 +68,43 @@ export function MatrixGrid({
     [coverage],
   );
 
-  const atRisk = coverage.filter((c) => c.competent <= 1);
+  const uncovered = coverage.filter((c) => c.competent === 0);
+  const atRisk = coverage.filter((c) => c.competent === 1);
 
   return (
     <div className="space-y-4">
       {/* Single-point-of-failure warning: the report a manager acts on first */}
+      {uncovered.length > 0 && (
+        <div
+          className="card flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3"
+          style={{ borderColor: "var(--st-suspended-br)", background: "var(--st-suspended-bg)" }}
+        >
+          <span
+            className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[13px] font-bold"
+            style={{ background: "var(--st-suspended-fg)", color: "var(--st-suspended-bg)" }}
+            aria-hidden
+          >
+            ✕
+          </span>
+          <p className="text-[13.5px] font-medium" style={{ color: "var(--st-suspended-fg)" }}>
+            {uncovered.length} machine{uncovered.length === 1 ? " has" : "s have"} nobody signed off to
+            operate {uncovered.length === 1 ? "it" : "them"} at all.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {uncovered.map((c) => (
+              <Link
+                key={c.machineId}
+                href={routes.machine(c.machineId)}
+                className="rounded px-1.5 py-0.5 font-mono text-[11.5px] font-semibold"
+                style={{ background: "var(--st-suspended-fg)", color: "var(--st-suspended-bg)" }}
+              >
+                {c.code}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       {atRisk.length > 0 && (
         <div
           className="card flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3"
@@ -85,14 +118,14 @@ export function MatrixGrid({
             !
           </span>
           <p className="text-[13.5px] font-medium" style={{ color: "var(--st-revalidate-fg)" }}>
-            {atRisk.length} machine{atRisk.length === 1 ? " has" : "s have"} one competent operator or fewer —
-            production stops on that machine if they are absent.
+            {atRisk.length} machine{atRisk.length === 1 ? " has" : "s have"} only one competent operator —
+            production stops there if they are absent.
           </p>
           <div className="flex flex-wrap gap-1.5">
             {atRisk.map((c) => (
               <Link
                 key={c.machineId}
-                href={`/machines/${c.machineId}` as never}
+                href={routes.machine(c.machineId)}
                 className="rounded px-1.5 py-0.5 font-mono text-[11.5px] font-semibold"
                 style={{ background: "var(--st-revalidate-fg)", color: "var(--st-revalidate-bg)" }}
               >
@@ -169,7 +202,7 @@ export function MatrixGrid({
               {visibleMachines.map((m) => (
                 <th key={m.id} scope="col" className="col-head">
                   <div className="col-head-inner">
-                    <Link href={`/machines/${m.id}` as never} className="hover:underline">
+                    <Link href={routes.machine(m.id)} className="hover:underline">
                       <span className="font-mono font-bold">{m.code}</span>
                       <span className="text-[var(--ink-faint)]"> · {m.name}</span>
                     </Link>
@@ -183,7 +216,7 @@ export function MatrixGrid({
             {visibleRows.map((row) => (
               <tr key={row.userId}>
                 <th scope="row" className="name-col text-left font-normal px-4 py-2">
-                  <Link href={`/people/${row.userId}` as never} className="group block">
+                  <Link href={routes.person(row.userId)} className="group block">
                     <span className="block text-[13.5px] font-medium group-hover:underline">
                       {row.name}
                     </span>
@@ -324,7 +357,7 @@ function Cell({
 
   return (
     <Link
-      href={`/competence/${cell!.competenceId}` as never}
+      href={routes.competence(cell!.competenceId)}
       className={className}
       title={title}
       aria-label={`${person}, ${machine.name}: ${meta.label}`}

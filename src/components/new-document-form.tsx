@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import { createDocument } from "@/lib/document-commands";
 import type { ActionState } from "@/lib/commands";
-import { Banner } from "./sign-off-form";
+import { Banner } from "./banner";
 import { Field } from "./editor-bits";
 
 export function NewDocumentForm({

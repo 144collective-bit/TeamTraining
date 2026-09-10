@@ -14,7 +14,7 @@ export default async function MatrixPage() {
     getCoverage(user.tenantId),
     getEligibleTrainers(user.tenantId),
   ]);
-  const canTrain = atLeast(user.role as never, "TRAINER");
+  const canTrain = atLeast(user.role, "TRAINER");
 
   return (
     <>

@@ -7,9 +7,11 @@ import {
   recordAssessment, signCompetence, changeStatus, recordReview,
   voidSignOff, readyForAssessment, type ActionState,
 } from "@/lib/commands";
-import { Banner } from "./sign-off-form";
+import { Banner } from "./banner";
+import { DeviceClock } from "./device-clock";
 import { REQUIRED_SIGNATURES, type SignatureRole } from "@/lib/state-machine";
 import type { Status } from "@/lib/competence";
+import { routes } from "@/lib/routes";
 
 type Props = {
   competenceId: string;
@@ -50,7 +52,7 @@ function InTraining({ competenceId, openSessionId, traineeName }: Props) {
   return (
     <div className="space-y-3">
       {openSessionId && (
-        <Link href={`/signoff/${openSessionId}` as never} className="btn btn-primary w-full sm:w-auto">
+        <Link href={routes.captureSignOff(openSessionId)} className="btn btn-primary w-full sm:w-auto">
           Record today&rsquo;s sign-off
         </Link>
       )}
@@ -166,7 +168,7 @@ function Signatures({ competenceId, signedRoles, traineeName, canManage }: Props
                       style={{ borderColor: "var(--accent)", background: "var(--surface-sunk)" }}>
                   <input type="hidden" name="competenceId" value={competenceId} />
                   <input type="hidden" name="role" value={role} />
-                  <DeviceTime />
+                  <DeviceClock />
                   <label htmlFor={`pin-${role}`} className="label mb-1.5 block">
                     {role === "TRAINEE" ? `${traineeName}'s PIN` : "Your PIN"}
                   </label>
@@ -357,8 +359,3 @@ export function VoidSignOff({ signOffId }: { signOffId: string }) {
   );
 }
 
-function DeviceTime() {
-  const [now, setNow] = useState("");
-  useEffect(() => { setNow(new Date().toISOString()); }, []);
-  return <input type="hidden" name="occurredAt" value={now} />;
-}
