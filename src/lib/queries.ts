@@ -1,7 +1,109 @@
-import { asTenant, schema, type Tx } from "@/db";
+import { db, asTenant, schema, type Tx } from "@/db";
 import { streamHistory, verifyStream } from "./events";
 import { eq, and, or, asc, desc, sql, inArray, isNotNull } from "drizzle-orm";
 import type { Status, Level } from "./competence";
+
+/* ------------------------------------------------------------------ *
+ * Organisation
+ * ------------------------------------------------------------------ */
+
+/** Whether anything has been set up yet. Runs before any tenant is known. */
+export async function hasAnyOrganisation(): Promise<boolean> {
+  const rows = await db.execute<{ tt_has_organisation: boolean }>(
+    sql`SELECT tt_has_organisation()`,
+  );
+  return Boolean(rows[0]?.tt_has_organisation);
+}
+
+export async function getOrganisation(tenantId: string) {
+  return asTenant(tenantId, async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(schema.tenants)
+      .where(eq(schema.tenants.id, tenantId))
+      .limit(1);
+    return row ?? null;
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Admin
+ * ------------------------------------------------------------------ */
+
+/** Everyone, leavers included — the admin list is the full record. */
+export async function getAllPeople(tenantId: string) {
+  return asTenant(tenantId, (tx) =>
+    tx
+      .select({
+        id: schema.users.id,
+        name: schema.users.name,
+        email: schema.users.email,
+        employeeRef: schema.users.employeeRef,
+        jobTitle: schema.users.jobTitle,
+        role: schema.users.role,
+        status: schema.users.status,
+        startedOn: schema.users.startedOn,
+        hasPassword: sql<boolean>`${schema.users.passwordHash} is not null`,
+        hasPin: sql<boolean>`${schema.users.pinHash} is not null`,
+        competences: sql<number>`(select count(*) from ${schema.competenceRecords} c where c.user_id = ${schema.users.id})`.mapWith(Number),
+      })
+      .from(schema.users)
+      .where(eq(schema.users.tenantId, tenantId))
+      .orderBy(asc(schema.users.status), asc(schema.users.name)),
+  );
+}
+
+/** Areas with their machines, retired ones included. */
+export async function getPlant(tenantId: string) {
+  return asTenant(tenantId, async (tx) => {
+    const areas = await tx
+      .select()
+      .from(schema.areas)
+      .where(eq(schema.areas.tenantId, tenantId))
+      .orderBy(asc(schema.areas.sortOrder));
+
+    const machines = await tx
+      .select({
+        id: schema.machines.id,
+        areaId: schema.machines.areaId,
+        code: schema.machines.code,
+        name: schema.machines.name,
+        manufacturer: schema.machines.manufacturer,
+        model: schema.machines.model,
+        serialNumber: schema.machines.serialNumber,
+        assetRef: schema.machines.assetRef,
+        highRisk: schema.machines.highRisk,
+        revalidationMonths: schema.machines.revalidationMonths,
+        active: schema.machines.active,
+        competences: sql<number>`(select count(*) from ${schema.competenceRecords} c where c.machine_id = ${schema.machines.id})`.mapWith(Number),
+      })
+      .from(schema.machines)
+      .where(eq(schema.machines.tenantId, tenantId))
+      .orderBy(asc(schema.machines.sortOrder));
+
+    return { areas, machines };
+  });
+}
+
+/** Counts for the admin hub, so it can say what is and is not set up yet. */
+export async function getAdminSummary(tenantId: string) {
+  return asTenant(tenantId, async (tx) => {
+    const [row] = await tx
+      .select({
+        people: sql<number>`(select count(*) from ${schema.users} where tenant_id = ${tenantId} and status = 'ACTIVE')`.mapWith(Number),
+        areas: sql<number>`(select count(*) from ${schema.areas} where tenant_id = ${tenantId})`.mapWith(Number),
+        machines: sql<number>`(select count(*) from ${schema.machines} where tenant_id = ${tenantId} and active = true)`.mapWith(Number),
+        sops: sql<number>`(select count(*) from ${schema.documents} d where d.tenant_id = ${tenantId} and d.kind = 'SOP' and d.archived = false)`.mapWith(Number),
+        risks: sql<number>`(select count(*) from ${schema.documents} d where d.tenant_id = ${tenantId} and d.kind = 'RISK_ASSESSMENT' and d.archived = false)`.mapWith(Number),
+        training: sql<number>`(select count(*) from ${schema.documents} d where d.tenant_id = ${tenantId} and d.kind = 'TRAINING_DOC' and d.archived = false)`.mapWith(Number),
+        inductions: sql<number>`(select count(*) from ${schema.documents} d where d.tenant_id = ${tenantId} and d.kind = 'INDUCTION' and d.archived = false)`.mapWith(Number),
+      })
+      .from(schema.tenants)
+      .where(eq(schema.tenants.id, tenantId))
+      .limit(1);
+    return row;
+  });
+}
 
 /* ------------------------------------------------------------------ *
  * Training matrix

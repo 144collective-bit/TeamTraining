@@ -1,8 +1,14 @@
 /**
- * Seeds a working example modelled on Protektor's Kidderminster plant:
- * 6 press brakes, 2 punches, 1 large laser cutter, 1 welding bay.
+ * Loads a demonstration organisation: a fictional steel fabricator with
+ * 6 press brakes, 2 punches, a laser cutter and a welding bay.
  *
- * Run with: npm run db:seed
+ * This is a fixture for demos and for the end-to-end suites. A real
+ * installation starts empty and is built through the admin section — see
+ * `npm run db:setup`, which deliberately loads nothing.
+ *
+ *   npm run db:demo
+ *
+ * TRUNCATES EVERY TABLE FIRST. Never run it against real records.
  */
 import "dotenv/config";
 import { getAdminDb, schema } from "./index";
@@ -121,34 +127,34 @@ async function main() {
    * ---------------------------------------------------------------- */
   const [tenant] = await db
     .insert(schema.tenants)
-    .values({ name: "Protektor UK", slug: "protektor", brandColor: "#C8102E" })
+    .values({ name: "Northgate Fabrications", slug: "northgate", siteName: "Demo Site", brandColor: "#1d4ed8" })
     .returning();
   const tenantId = tenant.id;
 
   /* ---------------------------------------------------------------- *
    * People
    * ---------------------------------------------------------------- */
-  const password = await hashSecret("protektor");
+  const password = await hashSecret("demo-password-1");
   const pin = await hashSecret("1234");
 
   const staff: {
     name: string; email: string; ref: string; jobTitle: string;
     role: "ADMIN" | "MANAGER" | "TRAINER" | "OPERATOR"; startedOn: string;
   }[] = [
-    { name: "David Whitfield", email: "d.whitfield@protektor.example", ref: "E-1001", jobTitle: "Operations Manager",   role: "ADMIN",    startedOn: iso(2900) },
-    { name: "Karen Bhatti",    email: "k.bhatti@protektor.example",    ref: "E-1002", jobTitle: "Production Manager",   role: "MANAGER",  startedOn: iso(2100) },
-    { name: "Ian Prosser",     email: "i.prosser@protektor.example",   ref: "E-1003", jobTitle: "Shift Supervisor",     role: "TRAINER",  startedOn: iso(3400) },
-    { name: "Marta Kowalczyk", email: "m.kowalczyk@protektor.example", ref: "E-1004", jobTitle: "Senior Setter",        role: "TRAINER",  startedOn: iso(2600) },
-    { name: "Gareth Lloyd",    email: "g.lloyd@protektor.example",     ref: "E-1005", jobTitle: "Welding Supervisor",   role: "TRAINER",  startedOn: iso(3100) },
-    { name: "Tomasz Nowak",    email: "t.nowak@protektor.example",     ref: "E-1006", jobTitle: "Press Brake Operator", role: "OPERATOR", startedOn: iso(1500) },
-    { name: "Sadia Rahman",    email: "s.rahman@protektor.example",    ref: "E-1007", jobTitle: "Press Brake Operator", role: "OPERATOR", startedOn: iso(900)  },
-    { name: "Callum Reid",     email: "c.reid@protektor.example",      ref: "E-1008", jobTitle: "Laser Operator",       role: "OPERATOR", startedOn: iso(1200) },
-    { name: "Jordan Ellis",    email: "j.ellis@protektor.example",     ref: "E-1009", jobTitle: "Punch Operator",       role: "OPERATOR", startedOn: iso(700)  },
-    { name: "Priya Shah",      email: "p.shah@protektor.example",      ref: "E-1010", jobTitle: "Fabricator",           role: "OPERATOR", startedOn: iso(430)  },
-    { name: "Wayne Docherty",  email: "w.docherty@protektor.example",  ref: "E-1011", jobTitle: "Welder",               role: "OPERATOR", startedOn: iso(1800) },
-    { name: "Elena Petrova",   email: "e.petrova@protektor.example",   ref: "E-1012", jobTitle: "Fabricator",           role: "OPERATOR", startedOn: iso(210)  },
-    { name: "Ryan McAllister", email: "r.mcallister@protektor.example",ref: "E-1013", jobTitle: "Trainee Operator",     role: "OPERATOR", startedOn: iso(45)   },
-    { name: "Aisha Khan",      email: "a.khan@protektor.example",      ref: "E-1014", jobTitle: "Trainee Operator",     role: "OPERATOR", startedOn: iso(12)   },
+    { name: "David Whitfield", email: "d.whitfield@northgate.example", ref: "E-1001", jobTitle: "Operations Manager",   role: "ADMIN",    startedOn: iso(2900) },
+    { name: "Karen Bhatti",    email: "k.bhatti@northgate.example",    ref: "E-1002", jobTitle: "Production Manager",   role: "MANAGER",  startedOn: iso(2100) },
+    { name: "Ian Prosser",     email: "i.prosser@northgate.example",   ref: "E-1003", jobTitle: "Shift Supervisor",     role: "TRAINER",  startedOn: iso(3400) },
+    { name: "Marta Kowalczyk", email: "m.kowalczyk@northgate.example", ref: "E-1004", jobTitle: "Senior Setter",        role: "TRAINER",  startedOn: iso(2600) },
+    { name: "Gareth Lloyd",    email: "g.lloyd@northgate.example",     ref: "E-1005", jobTitle: "Welding Supervisor",   role: "TRAINER",  startedOn: iso(3100) },
+    { name: "Tomasz Nowak",    email: "t.nowak@northgate.example",     ref: "E-1006", jobTitle: "Press Brake Operator", role: "OPERATOR", startedOn: iso(1500) },
+    { name: "Sadia Rahman",    email: "s.rahman@northgate.example",    ref: "E-1007", jobTitle: "Press Brake Operator", role: "OPERATOR", startedOn: iso(900)  },
+    { name: "Callum Reid",     email: "c.reid@northgate.example",      ref: "E-1008", jobTitle: "Laser Operator",       role: "OPERATOR", startedOn: iso(1200) },
+    { name: "Jordan Ellis",    email: "j.ellis@northgate.example",     ref: "E-1009", jobTitle: "Punch Operator",       role: "OPERATOR", startedOn: iso(700)  },
+    { name: "Priya Shah",      email: "p.shah@northgate.example",      ref: "E-1010", jobTitle: "Fabricator",           role: "OPERATOR", startedOn: iso(430)  },
+    { name: "Wayne Docherty",  email: "w.docherty@northgate.example",  ref: "E-1011", jobTitle: "Welder",               role: "OPERATOR", startedOn: iso(1800) },
+    { name: "Elena Petrova",   email: "e.petrova@northgate.example",   ref: "E-1012", jobTitle: "Fabricator",           role: "OPERATOR", startedOn: iso(210)  },
+    { name: "Ryan McAllister", email: "r.mcallister@northgate.example",ref: "E-1013", jobTitle: "Trainee Operator",     role: "OPERATOR", startedOn: iso(45)   },
+    { name: "Aisha Khan",      email: "a.khan@northgate.example",      ref: "E-1014", jobTitle: "Trainee Operator",     role: "OPERATOR", startedOn: iso(12)   },
   ];
 
   const users = await db
@@ -615,24 +621,87 @@ async function main() {
   }
 
   /* ---------------------------------------------------------------- *
-   * Induction in progress - Aisha, day 12
+   * A process training sign-off and an induction checklist
+   * ---------------------------------------------------------------- */
+  const trainingBody = {
+    process: "Press brake setting and operation",
+    sopReference: "SOP-PB-01",
+    equipment: {
+      type: "Hydraulic press brake", manufacturer: "Amada",
+      model: "HFE 1303", location: "Press Brake Bay", targetAverage: "",
+    },
+    notes: "Delivered on PB-01; transferable to PB-02 and PB-03 with a familiarisation.",
+    areas: [
+      { label: "Machine induction, guarding and emergency stops", reference: "RA-PB-01" },
+      { label: "Risk assessment briefed and understood", reference: "RA-PB-01" },
+      { label: "Pre-start checks", reference: "SOP-PB-01" },
+      { label: "Loading a program and confirming the drawing issue", reference: "SOP-PB-01" },
+      { label: "Tool setting and isolation", reference: "SOP-PB-01" },
+      { label: "First-off checks and sign-off", reference: "SOP-PB-01" },
+      { label: "Running a batch and in-process checks", reference: "SOP-PB-01" },
+      { label: "Dealing with a stoppage", reference: "" },
+      { label: "Completing paperwork", reference: "" },
+      { label: "Clean down and shift handover", reference: "SOP-PB-01" },
+      { label: "Question and answer sheet", reference: "" },
+    ],
+  };
+  const [trainingDoc] = await db.insert(schema.documents).values({
+    tenantId, machineId: machine("PB-01").id, kind: "TRAINING_DOC",
+    reference: "PT-PB-01", title: "Press Brake Operation - Training Sign-Off",
+    ownerId: ian.id, reviewMonths: 24,
+  }).returning();
+  await db.insert(schema.documentRevisions).values({
+    tenantId, documentId: trainingDoc.id, revision: 2, status: "PUBLISHED",
+    changeClass: "MINOR", changeSummary: "Added the stoppage handling area.",
+    body: trainingBody, contentHash: contentHash(trainingBody),
+    authoredBy: ian.id, approvedBy: prodMgr.id,
+    publishedAt: new Date(`${iso(150)}T09:00:00Z`),
+    nextReviewOn: addMonths(iso(150), 24),
+  });
+
+  const checklistBody = {
+    scope: "Completed before a new starter enters the shop floor.",
+    items: [
+      { label: "Site tour and welfare facilities", reference: "" },
+      { label: "Emergency procedures, alarms and assembly point", reference: "" },
+      { label: "General site risk assessment briefed", reference: "RA-SITE-001" },
+      { label: "PPE issued and fitted", reference: "" },
+      { label: "Manual handling briefing", reference: "" },
+      { label: "Fire marshals and first aiders identified", reference: "" },
+      { label: "Accident and near-miss reporting process", reference: "" },
+      { label: "Introduction to designated trainer", reference: "" },
+    ],
+  };
+  const [checklistDoc] = await db.insert(schema.documents).values({
+    tenantId, machineId: null, kind: "INDUCTION",
+    reference: "IND-SITE", title: "Shop Floor Induction Checklist",
+    ownerId: admin.id, reviewMonths: 12,
+  }).returning();
+  const [checklistRev] = await db.insert(schema.documentRevisions).values({
+    tenantId, documentId: checklistDoc.id, revision: 1, status: "PUBLISHED",
+    changeClass: "MINOR", changeSummary: "First issue.",
+    body: checklistBody, contentHash: contentHash(checklistBody),
+    authoredBy: admin.id, approvedBy: prodMgr.id,
+    publishedAt: new Date(`${iso(300)}T09:00:00Z`),
+    nextReviewOn: addMonths(iso(300), 12),
+  }).returning();
+
+  /* ---------------------------------------------------------------- *
+   * Induction in progress, instantiated from that checklist
    * ---------------------------------------------------------------- */
   const aisha = byName("Aisha Khan");
   const [induction] = await db.insert(schema.inductions).values({
     tenantId, userId: aisha.id, trainerId: ian.id,
+    checklistRevisionId: checklistRev.id,
     startedAt: new Date(`${iso(2)}T08:00:00Z`),
   }).returning();
 
-  const inductionChecklist = [
-    { label: "Site tour and welfare facilities", done: true },
-    { label: "Emergency procedures, alarms and assembly point", done: true },
-    { label: "General site risk assessment briefed (RA-SITE-001)", done: true, rev: siteRaRev.id },
-    { label: "PPE issued and fitted", done: true },
-    { label: "Manual handling briefing", done: true },
-    { label: "Fire marshals and first aiders identified", done: false },
-    { label: "Accident and near-miss reporting process", done: false },
-    { label: "Introduction to designated trainer", done: false },
-  ];
+  // Instantiated from the checklist above; the first five are already done.
+  const inductionChecklist = checklistBody.items.map((item, i) => ({
+    label: item.label,
+    done: i < 5,
+    rev: item.reference === "RA-SITE-001" ? siteRaRev.id : undefined,
+  }));
 
   await db.insert(schema.inductionItems).values(
     inductionChecklist.map((item, i) => ({
@@ -653,17 +722,17 @@ async function main() {
   console.log(`
 Seed complete.
 
-  Tenant     Protektor UK
-  Machines   ${machines.length}  (6 press brakes, 2 punches, 1 laser, 1 welding bay)
-  People     ${users.length}
-  Documents  ${machineSpecs.length * 2 + 1}  (SOP + RA per machine, plus site induction RA)
-  Matrix     ${cells.length} competence records
+  Organisation   Northgate Fabrications (demo)
+  Machines       ${machines.length}  (6 press brakes, 2 punches, 1 laser, 1 welding bay)
+  People         ${users.length}
+  Documents      ${machineSpecs.length * 2 + 3}  (SOP + RA per machine, site RA, a training sign-off and an induction checklist)
+  Matrix         ${cells.length} competence records
 
   Sign in with any of:
-    d.whitfield@protektor.example   (Admin)
-    k.bhatti@protektor.example      (Manager)
-    i.prosser@protektor.example     (Trainer)
-  Password: protektor      Shop-floor PIN: 1234
+    d.whitfield@northgate.example   (Admin)
+    k.bhatti@northgate.example      (Manager)
+    i.prosser@northgate.example     (Trainer)
+  Password: demo-password-1      Shop-floor PIN: 1234
 `);
 
   process.exit(0);

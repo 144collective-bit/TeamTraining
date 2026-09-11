@@ -7,6 +7,8 @@ import { PrintButton } from "@/components/print-button";
 import { StatusPill } from "@/components/status-pill";
 import { formatDate, formatDateTime, daysUntil, type Status, type Level } from "@/lib/competence";
 import { InductionItem } from "@/components/induction-item";
+import { StartInduction } from "@/components/start-induction";
+import { getEligibleTrainers } from "@/lib/queries";
 import { atLeast } from "@/lib/state-machine";
 import { routes } from "@/lib/routes";
 
@@ -20,6 +22,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
 
   const { person, competences, induction, inductionItems } = data;
   const canEditInduction = atLeast(user.role, "TRAINER");
+  const trainers = canEditInduction && !induction ? await getEligibleTrainers(user.tenantId) : [];
   const competent = competences.filter((c) => c.status === "COMPETENT");
   const inductionDone = inductionItems.filter((i) => i.completedAt).length;
 
@@ -34,6 +37,14 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
 
       <div className="p-5 sm:p-7 space-y-6">
         {/* Induction */}
+        {!induction && canEditInduction && (
+          <StartInduction
+            userId={person.id}
+            personName={person.name}
+            trainers={trainers.map((t) => ({ id: t.id, name: t.name }))}
+          />
+        )}
+
         {induction && (
           <section className="card">
             <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pt-4 pb-3 border-b" style={{ borderColor: "var(--border)" }}>

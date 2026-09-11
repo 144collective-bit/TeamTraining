@@ -46,7 +46,10 @@ export const competenceLevel = pgEnum("competence_level", [
 export const documentKind = pgEnum("document_kind", [
   "SOP",
   "RISK_ASSESSMENT",
+  /** A process training sign-off: the numbered areas a trainee is signed off on. */
   "TRAINING_DOC",
+  /** The induction checklist an induction is instantiated from. */
+  "INDUCTION",
   "COSHH",
   "OTHER",
 ]);
@@ -96,7 +99,10 @@ export const tenants = pgTable("tenants", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
-  brandColor: text("brand_color").notNull().default("#C8102E"),
+  brandColor: text("brand_color").notNull().default("#c8102e"),
+  /** Uploaded logo, shown in the navigation rail and on printed documents. */
+  logoAttachmentId: uuid("logo_attachment_id"),
+  siteName: text("site_name"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -394,6 +400,35 @@ export const assessments = pgTable(
   (t) => [index("assessments_competence_idx").on(t.competenceId)],
 );
 
+/**
+ * One row per training area on a process training sign-off.
+ *
+ * The paper version is a numbered list with a date and two signatures beside
+ * each line; this is that, tracked. The area label is snapshotted so the record
+ * still reads correctly after the training document is revised and the
+ * numbering moves.
+ */
+export const trainingAreaProgress = pgTable(
+  "training_area_progress",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    competenceId: uuid("competence_id").notNull().references(() => competenceRecords.id, { onDelete: "cascade" }),
+    trainingRevisionId: uuid("training_revision_id").references(() => documentRevisions.id, { onDelete: "set null" }),
+    areaIndex: integer("area_index").notNull(),
+    areaLabel: text("area_label").notNull(),
+    /** The training key: 0 none … 5 fully trained. */
+    level: integer("level").notNull().default(0),
+    note: text("note"),
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("training_area_competence_idx").on(t.competenceId, t.areaIndex),
+    index("training_area_tenant_idx").on(t.tenantId),
+  ],
+);
+
 /* ------------------------------------------------------------------ *
  * Induction
  * ------------------------------------------------------------------ */
@@ -405,6 +440,8 @@ export const inductions = pgTable(
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     trainerId: uuid("trainer_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+    /** The checklist revision this induction was instantiated from. */
+    checklistRevisionId: uuid("checklist_revision_id").references(() => documentRevisions.id, { onDelete: "set null" }),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },

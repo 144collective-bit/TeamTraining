@@ -16,6 +16,7 @@ import {
 } from "./command-support";
 import { today, addMonths } from "./dates";
 import type { Status } from "./competence";
+import { readInduction } from "./documents";
 
 export type { ActionState };
 
@@ -697,6 +698,93 @@ export async function recordReview(
 /* ------------------------------------------------------------------ *
  * Induction  (business plan steps 1-2)
  * ------------------------------------------------------------------ */
+
+/**
+ * Starts an induction, instantiating the items from the induction checklist in
+ * force right now. The items are copied rather than referenced so the record
+ * still reads correctly after the checklist is revised — the same reason a
+ * training record keeps the SOP revision it was signed against.
+ */
+export async function startInduction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const user = await requireUser();
+    requireRole(user.role, "TRAINER", "start an induction");
+
+    const userId = String(formData.get("userId") ?? "");
+    const trainerId = String(formData.get("trainerId") ?? "") || user.id;
+    if (!userId) return { error: "Choose who is being inducted." };
+
+    return await asTenant(user.tenantId, async (tx) => {
+      const open = await tx
+        .select({ id: schema.inductions.id })
+        .from(schema.inductions)
+        .where(and(
+          eq(schema.inductions.tenantId, user.tenantId),
+          eq(schema.inductions.userId, userId),
+          sql`${schema.inductions.completedAt} is null`,
+        ))
+        .limit(1);
+      if (open.length > 0) return { error: "That person already has an induction in progress." };
+
+      const [checklist] = await tx
+        .select({
+          id: schema.documentRevisions.id,
+          body: schema.documentRevisions.body,
+        })
+        .from(schema.documentRevisions)
+        .innerJoin(schema.documents, eq(schema.documentRevisions.documentId, schema.documents.id))
+        .where(and(
+          eq(schema.documents.tenantId, user.tenantId),
+          eq(schema.documents.kind, "INDUCTION"),
+          eq(schema.documents.archived, false),
+          eq(schema.documentRevisions.status, "PUBLISHED"),
+        ))
+        .limit(1);
+
+      if (!checklist) {
+        return {
+          error: "There is no published induction checklist yet. Create one first, under Documents.",
+        };
+      }
+
+      const items = readInduction(checklist.body).items;
+      if (items.length === 0) return { error: "That induction checklist has no items." };
+
+      const [created] = await tx
+        .insert(schema.inductions)
+        .values({
+          tenantId: user.tenantId, userId, trainerId,
+          checklistRevisionId: checklist.id,
+        })
+        .returning();
+
+      await tx.insert(schema.inductionItems).values(
+        items.map((item, i) => ({
+          tenantId: user.tenantId,
+          inductionId: created.id,
+          label: item.label,
+          sortOrder: i + 1,
+        })),
+      );
+
+      await appendEvent(tx, {
+        tenantId: user.tenantId, streamId: created.id, streamType: "induction",
+        eventType: "InductionStarted",
+        payload: { userId, trainerId, checklistRevisionId: checklist.id, items: items.length },
+        actorId: user.id,
+      });
+
+      revalidatePath(`/people/${userId}`);
+      revalidatePath("/dashboard");
+      return { ok: `Induction started — ${items.length} items to work through.` };
+    });
+  } catch (e) {
+    return fail(e);
+  }
+}
 
 export async function toggleInductionItem(
   _prev: ActionState,

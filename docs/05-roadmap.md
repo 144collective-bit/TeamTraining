@@ -23,7 +23,7 @@ honest position against it, kept here so the roadmap and the code do not drift.
 | Offline capture (PWA with a local event log) | **Not built** |
 | One-click evidence pack (PDF/A + JSON sidecar) | **Not built** — print view is a stand-in |
 | Row-level security policies | Built — enforced by the database, with an adversarial cross-tenant test |
-| Adding people and machines through the UI | **Not built** — seeded only |
+| Adding people and machines through the UI | Built — plus areas, organisation branding and a first-run setup |
 
 Phases 2–4 below are untouched.
 

@@ -16,7 +16,13 @@ export const routes = {
   machines: "/machines" as Route,
   documents: "/documents" as Route,
   newDocument: "/documents/new" as Route,
+  newDocumentOfKind: (kind: string) => `/documents/new?kind=${kind}` as Route,
   login: "/login" as Route,
+  setup: "/setup" as Route,
+  admin: "/admin" as Route,
+  adminPeople: "/admin/people" as Route,
+  adminMachines: "/admin/machines" as Route,
+  adminOrganisation: "/admin/organisation" as Route,
 
   person: (id: string) => `/people/${id}` as Route,
   machine: (id: string) => `/machines/${id}` as Route,

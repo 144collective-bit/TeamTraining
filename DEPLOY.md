@@ -59,13 +59,14 @@ creates the policies, the application role's grants, and the four
 `SECURITY DEFINER` functions that authentication depends on — the app will not
 be able to sign anyone in until it has run.
 
-## 5. Seed, or don't
+## 5. Create the organisation
 
-`npm run db:seed` loads the Protektor worked example. It **truncates every
-table first**, so never run it against a database holding real records.
+Open the deployed app. With an empty database it sends you to a one-time setup
+page that creates your organisation and your administrator account. That page
+closes permanently as soon as an organisation exists.
 
-For a real deployment, skip it and create the first tenant and administrator
-directly. There is no sign-up flow yet — see *Not built yet* in the README.
+`npm run db:demo` loads a demonstration organisation instead. It **truncates
+every table first**, so never run it against a database holding real records.
 
 ## 6. Verify
 
@@ -91,7 +92,9 @@ where the app role turned out to be the owner will fail its first two checks.
 
 ## Before this is public
 
-The seeded example ships with published credentials (`protektor`, PIN `1234`)
-and every account shares them. That is fine for a demo behind Vercel
-Authentication or password protection; it is not fine on an open URL. Either
-enable deployment protection, or seed nothing and create real accounts.
+A real installation has no default credentials — the first administrator sets
+their own password during setup, and everyone else is added from inside the app.
+
+The **demo** fixture is different: every account in it shares one published
+password. If you load it, keep the deployment behind Vercel Authentication or
+password protection.

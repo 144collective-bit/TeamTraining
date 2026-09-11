@@ -1,21 +1,24 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
+import { hasAnyOrganisation } from "@/lib/queries";
 import { LoginForm } from "./login-form";
+import { routes } from "@/lib/routes";
+import { Wordmark } from "@/components/wordmark";
+
+export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
   if (await getSessionUser()) redirect("/dashboard");
+  // Nothing set up yet: send the first visitor to create the organisation.
+  if (!(await hasAnyOrganisation())) redirect(routes.setup);
 
   return (
     <main className="min-h-screen grid lg:grid-cols-[1.1fr_1fr]">
-      {/* Brand panel */}
       <div
         className="hidden lg:flex flex-col justify-between p-12 text-[var(--rail-ink)]"
         style={{ background: "var(--rail)" }}
       >
-        <div className="flex items-center gap-3">
-          <Mark />
-          <span className="text-[15px] font-semibold tracking-tight text-white">Protektor</span>
-        </div>
+        <Wordmark onDark />
 
         <div className="max-w-md">
           <h1 className="text-4xl font-semibold tracking-tight text-white leading-[1.1]">
@@ -29,17 +32,13 @@ export default async function LoginPage() {
         </div>
 
         <p className="text-xs text-[var(--rail-ink-soft)]">
-          Training &amp; Competence Management · Kidderminster
+          Training &amp; Competence Management
         </p>
       </div>
 
-      {/* Form panel */}
       <div className="flex items-center justify-center p-6 sm:p-12">
         <div className="w-full max-w-sm">
-          <div className="lg:hidden flex items-center gap-3 mb-10">
-            <Mark dark />
-            <span className="text-[15px] font-semibold tracking-tight">Protektor</span>
-          </div>
+          <div className="lg:hidden mb-10"><Wordmark /></div>
 
           <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
           <p className="mt-1.5 text-[var(--ink-soft)]">
@@ -47,44 +46,9 @@ export default async function LoginPage() {
           </p>
 
           <LoginForm />
-
-          <div
-            className="mt-8 rounded-lg border p-3.5 text-[13px]"
-            style={{ borderColor: "var(--border)", background: "var(--surface-sunk)" }}
-          >
-            <p className="label mb-2">Demo accounts</p>
-            <dl className="space-y-1 text-[var(--ink-soft)]">
-              <div className="flex justify-between gap-3">
-                <dt className="font-mono text-[12px]">d.whitfield@protektor.example</dt>
-                <dd className="shrink-0">Admin</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="font-mono text-[12px]">k.bhatti@protektor.example</dt>
-                <dd className="shrink-0">Manager</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="font-mono text-[12px]">i.prosser@protektor.example</dt>
-                <dd className="shrink-0">Trainer</dd>
-              </div>
-            </dl>
-            <p className="mt-2.5 pt-2.5 border-t text-[var(--ink-faint)]" style={{ borderColor: "var(--border)" }}>
-              Password <code className="font-mono text-[var(--ink)]">protektor</code>
-            </p>
-          </div>
         </div>
       </div>
     </main>
   );
 }
 
-function Mark({ dark = false }: { dark?: boolean }) {
-  return (
-    <div
-      className="grid h-8 w-8 place-items-center rounded-md text-[15px] font-bold text-white"
-      style={{ background: "var(--accent)" }}
-      aria-hidden
-    >
-      P
-    </div>
-  );
-}

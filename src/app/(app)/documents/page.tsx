@@ -18,14 +18,14 @@ export default async function DocumentsPage() {
     return acc;
   }, {});
 
-  const order = ["SOP", "RISK_ASSESSMENT", "TRAINING_DOC", "COSHH", "OTHER"];
+  const order = ["SOP", "RISK_ASSESSMENT", "TRAINING_DOC", "INDUCTION", "COSHH", "OTHER"];
 
   return (
     <>
       <PageHeader
         eyebrow="Records"
         title="Controlled documents"
-        description="Standard operating procedures and risk assessments. Every revision is frozen once published, so a training record always points at exactly what was read."
+        description="Procedures, risk assessments, training sign-offs and induction checklists. Every revision is frozen once published, so a training record always points at exactly what was read."
         actions={
           canEdit ? (
             <Link href="/documents/new" className="btn btn-primary">New document</Link>
@@ -33,6 +33,21 @@ export default async function DocumentsPage() {
         }
       />
       <div className="p-5 sm:p-7 space-y-7">
+        {docs.length === 0 && (
+          <div className="card card-pad max-w-2xl text-center">
+            <p className="text-[14px] font-medium">No documents yet.</p>
+            <p className="mx-auto mt-1.5 max-w-md text-[13px] leading-relaxed text-[var(--ink-soft)]">
+              Start from a template rather than a blank page. Each machine wants a procedure
+              and a risk assessment; each process wants a training sign-off.
+            </p>
+            {canEdit && (
+              <Link href="/documents/new" className="btn btn-primary mt-4 inline-flex">
+                Write your first document
+              </Link>
+            )}
+          </div>
+        )}
+
         {order.filter((k) => groups[k]?.length).map((kind) => (
           <section key={kind}>
             <h2 className="label mb-2.5">

@@ -9,8 +9,11 @@ import { Banner } from "./banner";
 import { TagInput, ListInput, ImagePicker, Field } from "./editor-bits";
 import { SopDocument } from "./sop-document";
 import { RaDocument } from "./ra-document";
+import { TrainingDocument } from "./training-document";
+import { InductionDocument } from "./induction-document";
 import {
   type SopBody, type RaBody, type SopStep, type RaHazard,
+  type TrainingBody, type InductionBody, type DocumentKind,
   LIKELIHOOD_LABELS, SEVERITY_LABELS, riskScore, riskBand,
 } from "@/lib/documents";
 import { CHANGE_CLASS_META } from "@/lib/competence";
@@ -25,12 +28,14 @@ const HAZARD_SUGGESTIONS = [
   "Hot surfaces", "Fume", "Fire", "Electric shock", "Laser radiation",
 ];
 
+type EditableBody = SopBody | RaBody | TrainingBody | InductionBody;
+
 type Meta = {
   documentId: string;
   revisionId: string;
   reference: string;
   revision: number;
-  kind: "SOP" | "RISK_ASSESSMENT";
+  kind: DocumentKind;
   machineCode: string | null;
   isFirstIssue: boolean;
 };
@@ -43,7 +48,7 @@ export function DocumentEditor({
 }: {
   meta: Meta;
   initialTitle: string;
-  initialBody: SopBody | RaBody;
+  initialBody: EditableBody;
   initialSummary: string;
 }) {
   const router = useRouter();
@@ -71,7 +76,7 @@ export function DocumentEditor({
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
-  function update<T extends SopBody | RaBody>(next: T) {
+  function update<T extends EditableBody>(next: T) {
     setBody(next);
     setDirty(true);
   }
@@ -123,9 +128,7 @@ export function DocumentEditor({
       {saveState.ok && !dirty && savedAt && <Banner tone="good">Draft saved at {savedAt}.</Banner>}
 
       {preview ? (
-        meta.kind === "SOP"
-          ? <SopDocument body={body as SopBody} meta={docMeta} draft />
-          : <RaDocument body={body as RaBody} meta={docMeta} draft />
+        <Preview kind={meta.kind} body={body} meta={docMeta} />
       ) : (
         <div className="space-y-5">
           <section className="card card-pad space-y-4">
@@ -138,9 +141,10 @@ export function DocumentEditor({
             </Field>
           </section>
 
-          {meta.kind === "SOP"
-            ? <SopFields body={body as SopBody} onChange={update} />
-            : <RaFields body={body as RaBody} onChange={update} />}
+          {meta.kind === "SOP" && <SopFields body={body as SopBody} onChange={update} />}
+          {meta.kind === "RISK_ASSESSMENT" && <RaFields body={body as RaBody} onChange={update} />}
+          {meta.kind === "TRAINING_DOC" && <TrainingFields body={body as TrainingBody} onChange={update} />}
+          {meta.kind === "INDUCTION" && <InductionFields body={body as InductionBody} onChange={update} />}
         </div>
       )}
 
@@ -153,6 +157,244 @@ export function DocumentEditor({
         onPublished={() => setDirty(false)}
       />
     </div>
+  );
+}
+
+function Preview({
+  kind, body, meta,
+}: { kind: DocumentKind; body: EditableBody; meta: Parameters<typeof SopDocument>[0]["meta"] }) {
+  switch (kind) {
+    case "SOP": return <SopDocument body={body as SopBody} meta={meta} draft />;
+    case "RISK_ASSESSMENT": return <RaDocument body={body as RaBody} meta={meta} draft />;
+    case "TRAINING_DOC": return <TrainingDocument body={body as TrainingBody} meta={meta} draft />;
+    case "INDUCTION": return <InductionDocument body={body as InductionBody} meta={meta} draft />;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Process training sign-off fields
+ * ------------------------------------------------------------------ */
+
+function TrainingFields({
+  body, onChange,
+}: { body: TrainingBody; onChange: (b: TrainingBody) => void }) {
+  function setArea(i: number, patch: Partial<TrainingBody["areas"][number]>) {
+    const areas = [...body.areas];
+    areas[i] = { ...areas[i], ...patch };
+    onChange({ ...body, areas });
+  }
+  function move(i: number, by: number) {
+    const j = i + by;
+    if (j < 0 || j >= body.areas.length) return;
+    const areas = [...body.areas];
+    [areas[i], areas[j]] = [areas[j], areas[i]];
+    onChange({ ...body, areas });
+  }
+
+  return (
+    <>
+      <section className="card card-pad space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Process" htmlFor="tr-process" hint="What this training covers.">
+            <input id="tr-process" value={body.process} className="input"
+                   onChange={(e) => onChange({ ...body, process: e.target.value })}
+                   placeholder="e.g. Press brake setting and operation" />
+          </Field>
+          <Field label="Procedure reference" htmlFor="tr-sop" hint="The SOP this training is delivered against.">
+            <input id="tr-sop" value={body.sopReference} className="input font-mono"
+                   onChange={(e) => onChange({ ...body, sopReference: e.target.value })}
+                   placeholder="e.g. SOP-PB-01" />
+          </Field>
+        </div>
+      </section>
+
+      <section className="card card-pad space-y-4">
+        <h2 className="text-[15px] font-semibold tracking-tight">Equipment</h2>
+        <div className="grid gap-3.5 sm:grid-cols-3">
+          {([
+            ["type", "Type of equipment", "e.g. Hydraulic press brake"],
+            ["manufacturer", "Manufacturer", ""],
+            ["model", "Model", ""],
+            ["location", "Location", "e.g. Press shop"],
+            ["targetAverage", "Target average", "Optional output target"],
+          ] as const).map(([key, label, placeholder]) => (
+            <Field key={key} label={label} htmlFor={`tr-${key}`}>
+              <input
+                id={`tr-${key}`} className="input" placeholder={placeholder}
+                value={body.equipment[key]}
+                onChange={(e) => onChange({ ...body, equipment: { ...body.equipment, [key]: e.target.value } })}
+              />
+            </Field>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-[15px] font-semibold tracking-tight">
+            Training areas <span className="ml-1.5 tabular text-[var(--ink-faint)]">{body.areas.length}</span>
+          </h2>
+          <p className="text-[12px] text-[var(--ink-faint)]">
+            Each is signed off separately, on the 0–5 training key.
+          </p>
+        </div>
+
+        <ol className="card divide-y" style={{ borderColor: "var(--border)" }}>
+          {body.areas.map((area, i) => (
+            <li key={i} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
+              <span className="tr-no tabular">{i + 1}</span>
+              <input
+                className="input !h-9 flex-1 min-w-[14rem]"
+                value={area.label}
+                onChange={(e) => setArea(i, { label: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    onChange({
+                      ...body,
+                      areas: [...body.areas.slice(0, i + 1), { label: "", reference: "" }, ...body.areas.slice(i + 1)],
+                    });
+                  }
+                }}
+                placeholder="What the trainee must be able to do"
+                aria-label={`Training area ${i + 1}`}
+              />
+              <input
+                className="input !h-9 w-28 font-mono text-[12px]"
+                value={area.reference}
+                onChange={(e) => setArea(i, { reference: e.target.value })}
+                placeholder="Ref"
+                aria-label={`Reference for area ${i + 1}`}
+              />
+              <span className="flex gap-1">
+                <button type="button" className="btn !h-8 !px-2 text-[12px]"
+                        onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move area ${i + 1} up`}>↑</button>
+                <button type="button" className="btn !h-8 !px-2 text-[12px]"
+                        onClick={() => move(i, 1)} disabled={i === body.areas.length - 1} aria-label={`Move area ${i + 1} down`}>↓</button>
+                <button
+                  type="button" className="btn !h-8 !px-2 text-[12px]"
+                  style={{ color: "var(--st-suspended-fg)" }}
+                  onClick={() => onChange({ ...body, areas: body.areas.filter((_, n) => n !== i) })}
+                  disabled={body.areas.length === 1}
+                  aria-label={`Delete area ${i + 1}`}
+                >✕</button>
+              </span>
+            </li>
+          ))}
+        </ol>
+
+        <button
+          type="button" className="btn w-full"
+          onClick={() => onChange({ ...body, areas: [...body.areas, { label: "", reference: "" }] })}
+        >
+          Add training area
+        </button>
+      </section>
+
+      <section className="card card-pad">
+        <Field label="Notes" htmlFor="tr-notes" hint="Optional. Anything a trainer should know before starting.">
+          <textarea id="tr-notes" rows={2} className="input !h-auto py-2"
+                    value={body.notes}
+                    onChange={(e) => onChange({ ...body, notes: e.target.value })} />
+        </Field>
+      </section>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Induction checklist fields
+ * ------------------------------------------------------------------ */
+
+function InductionFields({
+  body, onChange,
+}: { body: InductionBody; onChange: (b: InductionBody) => void }) {
+  function setItem(i: number, patch: Partial<InductionBody["items"][number]>) {
+    const items = [...body.items];
+    items[i] = { ...items[i], ...patch };
+    onChange({ ...body, items });
+  }
+  function move(i: number, by: number) {
+    const j = i + by;
+    if (j < 0 || j >= body.items.length) return;
+    const items = [...body.items];
+    [items[i], items[j]] = [items[j], items[i]];
+    onChange({ ...body, items });
+  }
+
+  return (
+    <>
+      <section className="card card-pad">
+        <Field label="Scope" htmlFor="in-scope" hint="When this induction is used and who it is for.">
+          <textarea id="in-scope" rows={2} className="input !h-auto py-2"
+                    value={body.scope}
+                    onChange={(e) => onChange({ ...body, scope: e.target.value })}
+                    placeholder="Completed before a new starter enters the shop floor." />
+        </Field>
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-[15px] font-semibold tracking-tight">
+            Checklist <span className="ml-1.5 tabular text-[var(--ink-faint)]">{body.items.length}</span>
+          </h2>
+          <p className="text-[12px] text-[var(--ink-faint)]">
+            Each item is ticked off individually, with who and when recorded.
+          </p>
+        </div>
+
+        <ol className="card divide-y" style={{ borderColor: "var(--border)" }}>
+          {body.items.map((item, i) => (
+            <li key={i} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
+              <span className="tr-no tabular">{i + 1}</span>
+              <input
+                className="input !h-9 flex-1 min-w-[14rem]"
+                value={item.label}
+                onChange={(e) => setItem(i, { label: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    onChange({
+                      ...body,
+                      items: [...body.items.slice(0, i + 1), { label: "", reference: "" }, ...body.items.slice(i + 1)],
+                    });
+                  }
+                }}
+                placeholder="What the new starter is shown or given"
+                aria-label={`Induction item ${i + 1}`}
+              />
+              <input
+                className="input !h-9 w-28 font-mono text-[12px]"
+                value={item.reference}
+                onChange={(e) => setItem(i, { reference: e.target.value })}
+                placeholder="Ref"
+                aria-label={`Reference for item ${i + 1}`}
+              />
+              <span className="flex gap-1">
+                <button type="button" className="btn !h-8 !px-2 text-[12px]"
+                        onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move item ${i + 1} up`}>↑</button>
+                <button type="button" className="btn !h-8 !px-2 text-[12px]"
+                        onClick={() => move(i, 1)} disabled={i === body.items.length - 1} aria-label={`Move item ${i + 1} down`}>↓</button>
+                <button
+                  type="button" className="btn !h-8 !px-2 text-[12px]"
+                  style={{ color: "var(--st-suspended-fg)" }}
+                  onClick={() => onChange({ ...body, items: body.items.filter((_, n) => n !== i) })}
+                  disabled={body.items.length === 1}
+                  aria-label={`Delete item ${i + 1}`}
+                >✕</button>
+              </span>
+            </li>
+          ))}
+        </ol>
+
+        <button
+          type="button" className="btn w-full"
+          onClick={() => onChange({ ...body, items: [...body.items, { label: "", reference: "" }] })}
+        >
+          Add checklist item
+        </button>
+      </section>
+    </>
   );
 }
 
@@ -489,7 +731,7 @@ function PublishPanel({
   summary: string;
   onSummaryChange: (v: string) => void;
   title: string;
-  body: SopBody | RaBody;
+  body: EditableBody;
   onPublished: () => void;
 }) {
   const [changeClass, setChangeClass] = useState(meta.isFirstIssue ? "MINOR" : "MINOR");

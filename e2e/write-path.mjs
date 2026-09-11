@@ -30,8 +30,8 @@ const step = async (name, fn) => {
 
 // sign in as the production manager (can do everything)
 await p.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
-await p.fill('#email', 'k.bhatti@protektor.example');
-await p.fill('#password', 'protektor');
+await p.fill('#email', 'k.bhatti@northgate.example');
+await p.fill('#password', 'demo-password-1');
 await Promise.all([p.waitForURL('**/dashboard'), p.click('button[type=submit]')]);
 
 // ---------------------------------------------------------------- 1

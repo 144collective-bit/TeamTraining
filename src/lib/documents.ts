@@ -76,6 +76,149 @@ export const EMPTY_RA: RaBody = {
 };
 
 /* ------------------------------------------------------------------ *
+ * Process training sign-off
+ * ------------------------------------------------------------------ */
+
+/**
+ * The training key. A trainee is scored against each area on this scale, and
+ * an area is only signed off once both the trainee and their team leader have
+ * put their name to it.
+ */
+export const TRAINING_KEY = [
+  { level: 0, label: "No training" },
+  { level: 1, label: "Task demonstrated" },
+  { level: 2, label: "Assisted in task" },
+  { level: 3, label: "Can complete with guidance" },
+  { level: 4, label: "Can work alone" },
+  { level: 5, label: "Fully trained" },
+] as const;
+
+export const MAX_TRAINING_LEVEL = 5;
+/** From this level the trainee may work unsupervised. */
+export const INDEPENDENT_LEVEL = 4;
+
+export function trainingKeyLabel(level: number): string {
+  return TRAINING_KEY[Math.max(0, Math.min(MAX_TRAINING_LEVEL, level))].label;
+}
+
+export const trainingAreaSchema = z.object({
+  label: z.string().trim().min(1, "Every training area needs a description."),
+  /** Optional pointer to the procedure covering this area. */
+  reference: z.string().trim().max(60).default(""),
+});
+
+export const trainingBodySchema = z.object({
+  process: z.string().trim().min(1, "Name the process this training covers."),
+  sopReference: z.string().trim().max(60).default(""),
+  equipment: z.object({
+    type: z.string().trim().default(""),
+    manufacturer: z.string().trim().default(""),
+    model: z.string().trim().default(""),
+    location: z.string().trim().default(""),
+    targetAverage: z.string().trim().default(""),
+  }).default({ type: "", manufacturer: "", model: "", location: "", targetAverage: "" }),
+  areas: z.array(trainingAreaSchema).min(1, "A training sign-off needs at least one area."),
+  notes: z.string().trim().default(""),
+});
+
+export type TrainingBody = z.infer<typeof trainingBodySchema>;
+export type TrainingArea = z.infer<typeof trainingAreaSchema>;
+
+export const EMPTY_TRAINING: TrainingBody = {
+  process: "",
+  sopReference: "",
+  equipment: { type: "", manufacturer: "", model: "", location: "", targetAverage: "" },
+  areas: [{ label: "", reference: "" }],
+  notes: "",
+};
+
+export function readTraining(body: unknown): TrainingBody {
+  const parsed = trainingBodySchema.safeParse(body);
+  if (parsed.success) return parsed.data;
+  const raw = (body ?? {}) as Record<string, unknown>;
+  const equipment = (raw.equipment ?? {}) as Record<string, unknown>;
+  return {
+    process: String(raw.process ?? ""),
+    sopReference: String(raw.sopReference ?? ""),
+    equipment: {
+      type: String(equipment.type ?? ""),
+      manufacturer: String(equipment.manufacturer ?? ""),
+      model: String(equipment.model ?? ""),
+      location: String(equipment.location ?? ""),
+      targetAverage: String(equipment.targetAverage ?? ""),
+    },
+    areas: Array.isArray(raw.areas)
+      ? (raw.areas as Record<string, unknown>[]).map((a) => ({
+          label: String(a.label ?? ""),
+          reference: String(a.reference ?? ""),
+        }))
+      : [],
+    notes: String(raw.notes ?? ""),
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * Induction checklist
+ * ------------------------------------------------------------------ */
+
+export const inductionItemSchema = z.object({
+  label: z.string().trim().min(1, "Every induction item needs a description."),
+  /** Reference to a document that must be briefed, e.g. a site risk assessment. */
+  reference: z.string().trim().max(60).default(""),
+});
+
+export const inductionBodySchema = z.object({
+  scope: z.string().trim().default(""),
+  items: z.array(inductionItemSchema).min(1, "An induction needs at least one item."),
+});
+
+export type InductionBody = z.infer<typeof inductionBodySchema>;
+
+export const EMPTY_INDUCTION: InductionBody = {
+  scope: "",
+  items: [{ label: "", reference: "" }],
+};
+
+export function readInduction(body: unknown): InductionBody {
+  const parsed = inductionBodySchema.safeParse(body);
+  if (parsed.success) return parsed.data;
+  const raw = (body ?? {}) as Record<string, unknown>;
+  return {
+    scope: String(raw.scope ?? ""),
+    items: Array.isArray(raw.items)
+      ? (raw.items as Record<string, unknown>[]).map((i) => ({
+          label: String(i.label ?? ""),
+          reference: String(i.reference ?? ""),
+        }))
+      : [],
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * Kind helpers
+ * ------------------------------------------------------------------ */
+
+export type DocumentKind = "SOP" | "RISK_ASSESSMENT" | "TRAINING_DOC" | "INDUCTION";
+
+export function emptyBodyFor(kind: DocumentKind) {
+  switch (kind) {
+    case "SOP": return EMPTY_SOP;
+    case "RISK_ASSESSMENT": return EMPTY_RA;
+    case "TRAINING_DOC": return EMPTY_TRAINING;
+    case "INDUCTION": return EMPTY_INDUCTION;
+  }
+}
+
+export function schemaFor(kind: DocumentKind) {
+  switch (kind) {
+    case "SOP": return sopBodySchema;
+    case "RISK_ASSESSMENT": return raBodySchema;
+    case "TRAINING_DOC": return trainingBodySchema;
+    case "INDUCTION": return inductionBodySchema;
+  }
+}
+
+/* ------------------------------------------------------------------ *
  * Risk scoring - the standard 5x5 matrix
  * ------------------------------------------------------------------ */
 

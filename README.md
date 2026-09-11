@@ -1,9 +1,11 @@
-# Protektor — Training & Competence
+# Training & Competence
 
-Onboarding, training and competence management for a steel fabrication shop floor.
+Onboarding, training and competence management for a manufacturing shop floor.
 
-Built as a working example for **Protektor UK** (Kidderminster): 6 press brakes,
-2 punches, 1 fibre laser cutter and a welding bay.
+The application ships **empty**. An organisation sets itself up, adds its own
+areas, machines and people, and writes its own procedures from templates. There
+is no customer's data or branding baked in — the logo, name and colour at the top
+of every screen and printed document are the customer's own.
 
 > When the auditor, the HSE inspector or a tribunal asks *"prove this person was
 > trained to run that machine"*, the answer is one click.
@@ -15,7 +17,9 @@ Built as a working example for **Protektor UK** (Kidderminster): 6 press brakes,
 | **Training matrix** | People down the left, machines across the top. Sticky name column and header, per-machine competent-operator count, single-point-of-failure warnings. Selecting an empty cell starts training. |
 | **Daily sign-offs** | The trainer's fast capture screen: pick a trainee, tap a progress rating, confirm the procedure steps covered, save. Pre-ticks what earlier sessions covered so it is confirm-not-enter. |
 | **Competence records** | Status, level, expiry, tri-signature evidence bundle and a verified hash-chained audit trail per person per machine. |
-| **Controlled documents** | SOPs authored as numbered steps, each pairing an instruction with a photograph; risk assessments scored on a 5×5 matrix. Immutable revisions — published ones cannot be edited or deleted, the database rejects it. |
+| **Controlled documents** | Four kinds: standard operating procedures (numbered steps with photographs), risk assessments (5×5 scoring), process training sign-offs (numbered areas on a 0–5 training key) and induction checklists. Immutable revisions — published ones cannot be edited or deleted, the database rejects it. |
+| **Templates** | Every document starts from a structure rather than a blank page. Shipped with the app, editable in full, never authoritative. |
+| **Admin** | Areas, machines, people and organisation branding. Nothing deletes: people become leavers and machines are retired, and their records survive. |
 | **Induction** | Per-person checklist tied to the site risk assessment, with completion timestamps. |
 | **Machines** | Asset detail, authorised operators, linked documents, coverage risk. |
 
@@ -26,9 +30,17 @@ Requires Node 22+ and Postgres 16+.
 ```bash
 npm install
 cp .env.example .env          # see the note on the two database URLs below
-npm run db:setup              # schema, triggers, RLS policies, seed data
+npm run db:setup              # schema, triggers and RLS policies — no data
 npm run dev
 ```
+
+Then open the app. With no organisation in the database you land on a one-time
+setup page that creates your organisation and your administrator account, and
+nothing else. Everything after that is built through the admin section.
+
+To load a demonstration organisation instead — a fictional fabricator with ten
+machines, fourteen people and a populated matrix — run `npm run db:demo`. It
+**truncates every table first**, so never point it at real records.
 
 **Two database URLs, deliberately.** `DATABASE_URL` is the role the application
 connects as: no superuser, no `BYPASSRLS`, so row-level security actually applies
@@ -38,16 +50,6 @@ the split is not optional.
 
 `npm run db:setup` runs the three steps individually available as `db:push`
 (schema), `db:sql` (triggers and policies) and `db:seed`.
-
-Then sign in at http://localhost:3000 with:
-
-| Account | Role |
-|---|---|
-| `d.whitfield@protektor.example` | Admin |
-| `k.bhatti@protektor.example` | Manager |
-| `i.prosser@protektor.example` | Trainer |
-
-Password `protektor`, shop-floor PIN `1234`. **Demo credentials — replace before any real use.**
 
 ### Scripts
 
@@ -59,14 +61,15 @@ Password `protektor`, shop-floor PIN `1234`. **Demo credentials — replace befo
 | `npm run typecheck` | TypeScript, no emit |
 | `npm test` | Unit tests for the pure logic (dates, state machine, scoring, hashing) |
 | `npm run stress` | Concurrency and scale checks against a seeded database |
-| `npm run db:setup` | Schema, triggers, RLS policies and seed data in one go |
+| `npm run db:setup` | Schema, triggers and RLS policies. Loads no data |
+| `npm run db:demo` | Load the demonstration organisation. Truncates everything first |
 | `npm run db:push` | Sync schema to the database |
 | `npm run db:sql` | Apply the integrity triggers and RLS policies |
 | `npm run test:isolation` | Adversarial cross-tenant test against a real second tenant |
-| `npm run db:seed` | Reset and reload the example data |
 | `npm run verify` | Verify every hash chain and every photograph, and prove the integrity guards hold |
 | `npm run e2e` | Walk the whole training write path in a browser (needs a running server) |
 | `npm run e2e:authoring` | Walk document authoring and the supersession cascade |
+| `npm run e2e:first-run` | Walk first-run setup against an empty database |
 
 ## How it's built
 
@@ -133,8 +136,11 @@ src/
   components/       Shared UI
   db/
     schema.ts       Drizzle schema
-    seed.ts         The Protektor working example
+    demo.ts         The demonstration organisation (a fixture, not shipped data)
   lib/
+    templates.ts    Starter documents a team leader edits rather than inventing
+    admin-commands.ts  People, plant and organisation settings
+    setup.ts        First-run: creates the organisation and its administrator
     commands.ts     Training writes: permission check, state machine, transaction
     document-commands.ts  Authoring, publishing and the supersession cascade
     documents.ts    SOP/RA schemas, risk scoring, upload rules
@@ -252,15 +258,38 @@ consequence of the procedure having moved on beneath them.
 | `npm run test:isolation` | A real second tenant attempting cross-tenant reads, writes and privilege escalation |
 | `npm run e2e` | The training lifecycle in a browser, end to end |
 | `npm run e2e:authoring` | Document authoring, separation of duties, and the supersession cascade |
+| `npm run e2e:first-run` | Setting up an organisation from nothing, then adding plant, people and a document |
 
 The e2e suites need a running server (`npm run build && npm run start`) and a fresh
 `npm run db:seed`.
+
+## Process training sign-offs
+
+Modelled on the paper sign-off sheet: a numbered list of training areas, each
+scored on a fixed key and signed by the operator and their team leader.
+
+| | |
+|---|---|
+| 0 | No training |
+| 1 | Task demonstrated |
+| 2 | Assisted in task |
+| 3 | Can complete with guidance |
+| 4 | Can work alone |
+| 5 | Fully trained |
+
+One difference from the paper form, deliberately: the paper sheet is per
+employee, so a team of twenty means twenty photocopies and twenty places for the
+list to drift. Here the **document** defines the areas once and each trainee's
+progress hangs off their own training record. Revise the sheet and everyone
+picks up the change under the same rules as any other controlled document.
 
 ## Not built yet
 
 Deliberately out of scope for this phase — see [the roadmap](docs/05-roadmap.md):
 
-- Adding people and machines through the UI
+- Per-area progress tracking against a training sign-off. The document defines
+  the areas and prints correctly; scoring each trainee area-by-area is the next
+  build.
 - Offline capture for the shop floor (planned as a PWA with a local event log)
 - Evidence pack export as PDF/A (the print view is a stand-in)
 - Production target calculator

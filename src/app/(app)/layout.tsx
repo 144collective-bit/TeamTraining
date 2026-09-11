@@ -2,28 +2,42 @@ import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { logout } from "@/lib/actions";
 import { NavLink } from "@/components/nav-link";
+import { OrgMark } from "@/components/org-mark";
+import { getOrganisation } from "@/lib/queries";
+import { atLeast } from "@/lib/state-machine";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+  const org = await getOrganisation(user.tenantId);
   const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("");
+  const canAdminister = atLeast(user.role, "MANAGER");
+
+  const brand = normaliseHex(org?.brandColor);
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[15rem_1fr]">
+    <div
+      className="min-h-screen lg:grid lg:grid-cols-[15rem_1fr]"
+      // Scoped to the signed-in shell, so sign-in and setup keep the product
+      // colour and every customer sees their own inside the app.
+      style={brand ? ({ "--accent": brand } as React.CSSProperties) : undefined}
+    >
       {/* Navigation rail */}
       <aside
         className="no-print flex lg:flex-col lg:h-screen lg:sticky lg:top-0 overflow-x-auto lg:overflow-visible"
         style={{ background: "var(--rail)", color: "var(--rail-ink)" }}
       >
-        <div className="flex items-center gap-2.5 px-4 h-14 lg:h-16 shrink-0 lg:border-b" style={{ borderColor: "#ffffff14" }}>
-          <div
-            className="grid h-7 w-7 place-items-center rounded-md text-[13px] font-bold text-white shrink-0"
-            style={{ background: "var(--accent)" }}
-            aria-hidden
+        <div className="flex items-center gap-2.5 px-4 h-14 lg:min-h-16 lg:py-3 shrink-0 lg:border-b" style={{ borderColor: "#ffffff14" }}>
+          <OrgMark
+            name={org?.name ?? "Organisation"}
+            logoAttachmentId={org?.logoAttachmentId}
+            brandColor={org?.brandColor}
+          />
+          <span
+            className="text-[13.5px] font-semibold leading-tight tracking-tight text-white"
+            style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+            title={org?.name ?? undefined}
           >
-            P
-          </div>
-          <span className="text-[14px] font-semibold tracking-tight text-white whitespace-nowrap">
-            Protektor
+            {org?.name ?? "Organisation"}
           </span>
         </div>
 
@@ -41,6 +55,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <NavLink href="/people" icon="people">People</NavLink>
           <NavLink href="/machines" icon="machine">Machines</NavLink>
           <NavLink href="/documents" icon="doc">Documents</NavLink>
+
+          {canAdminister && (
+            <>
+              <p className="hidden lg:block label px-2.5 pt-4 pb-1.5" style={{ color: "var(--rail-ink-soft)" }}>
+                Manage
+              </p>
+              <NavLink href="/admin" icon="settings">Admin</NavLink>
+            </>
+          )}
         </nav>
 
         <div className="hidden lg:block p-2.5 border-t" style={{ borderColor: "#ffffff14" }}>
@@ -74,4 +97,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <main className="min-w-0">{children}</main>
     </div>
   );
+}
+
+/** Only a six-digit hex reaches the stylesheet, so a bad value cannot inject. */
+function normaliseHex(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const hex = value.trim().toLowerCase();
+  return /^#[0-9a-f]{6}$/.test(hex) ? hex : null;
 }

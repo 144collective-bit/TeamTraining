@@ -52,12 +52,25 @@ export function formatDateTime(date: Date | null): string {
   });
 }
 
-export const DOC_KIND_META: Record<string, { label: string; abbr: string }> = {
-  SOP:             { label: "Standard Operating Procedure", abbr: "SOP" },
-  RISK_ASSESSMENT: { label: "Risk Assessment",              abbr: "RA" },
-  TRAINING_DOC:    { label: "Training Document",            abbr: "TRN" },
-  COSHH:           { label: "COSHH Assessment",             abbr: "COSHH" },
-  OTHER:           { label: "Other",                        abbr: "DOC" },
+export const DOC_KIND_META: Record<string, { label: string; abbr: string; blurb: string }> = {
+  SOP: {
+    label: "Standard Operating Procedure", abbr: "SOP",
+    blurb: "Numbered steps with photographs — the method a trainer teaches from.",
+  },
+  RISK_ASSESSMENT: {
+    label: "Risk Assessment", abbr: "RA",
+    blurb: "Hazards, controls and a 5×5 risk score.",
+  },
+  TRAINING_DOC: {
+    label: "Process Training Sign-Off", abbr: "PT",
+    blurb: "The numbered areas a trainee is signed off on, one at a time.",
+  },
+  INDUCTION: {
+    label: "Induction Checklist", abbr: "IND",
+    blurb: "What a new starter is walked through before they reach the floor.",
+  },
+  COSHH:  { label: "COSHH Assessment", abbr: "COSHH", blurb: "Hazardous substances." },
+  OTHER:  { label: "Other",            abbr: "DOC",   blurb: "" },
 };
 
 export const CHANGE_CLASS_META: Record<string, { label: string; effect: string }> = {

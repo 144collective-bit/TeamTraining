@@ -16,6 +16,10 @@ export default async function NewDocumentPage({
   if (!atLeast(user.role, "MANAGER")) redirect("/documents");
 
   const { kind, machine } = await searchParams;
+  const validKinds = ["SOP", "RISK_ASSESSMENT", "TRAINING_DOC", "INDUCTION"] as const;
+  const startKind = validKinds.includes(kind as never)
+    ? (kind as (typeof validKinds)[number])
+    : "SOP";
   const { machines } = await getTrainingOptions(user.tenantId);
 
   return (
@@ -33,7 +37,7 @@ export default async function NewDocumentPage({
 
       <NewDocumentForm
         machines={machines}
-        defaultKind={kind === "RISK_ASSESSMENT" ? "RISK_ASSESSMENT" : "SOP"}
+        defaultKind={startKind}
         defaultMachineId={machine ?? ""}
       />
     </div>

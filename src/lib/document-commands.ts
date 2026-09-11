@@ -10,7 +10,8 @@ import { contentHash } from "./crypto";
 import { atLeast, PermissionError } from "./state-machine";
 import { fail, requireRole, type ActionState } from "./command-support";
 import { addMonths } from "./dates";
-import { sopBodySchema, raBodySchema, EMPTY_SOP, EMPTY_RA } from "./documents";
+import { schemaFor, emptyBodyFor, type DocumentKind } from "./documents";
+import { findTemplate } from "./templates";
 
 
 /* ------------------------------------------------------------------ *
@@ -27,15 +28,24 @@ export async function createDocument(
     const outcome = await asTenant(user.tenantId, async (tx): Promise<ActionState> => {
       requireRole(user.role, "MANAGER", "create a controlled document");
 
-      const kind = String(formData.get("kind") ?? "SOP");
+      const kind = String(formData.get("kind") ?? "SOP") as DocumentKind;
       const title = String(formData.get("title") ?? "").trim();
       const machineId = String(formData.get("machineId") ?? "") || null;
       const reviewMonths = Number(formData.get("reviewMonths")) || 12;
+      const templateId = String(formData.get("templateId") ?? "").trim();
 
       if (!title) return { error: "Give the document a title." };
-      if (kind !== "SOP" && kind !== "RISK_ASSESSMENT") {
+      if (!["SOP", "RISK_ASSESSMENT", "TRAINING_DOC", "INDUCTION"].includes(kind)) {
         return { error: "Unknown document type." };
       }
+
+      // Start from a template where one was chosen, so a team leader edits a
+      // structure rather than facing an empty page.
+      const template = templateId ? findTemplate(templateId) : undefined;
+      if (templateId && (!template || template.kind !== kind)) {
+        return { error: "That template does not match the document type." };
+      }
+      const startingBody = template ? template.body : emptyBodyFor(kind);
 
       const reference = await nextReference(tx, user.tenantId, kind, machineId);
 
@@ -54,8 +64,8 @@ export async function createDocument(
             tenantId: user.tenantId, documentId: doc.id, revision: 1,
             status: "DRAFT", changeClass: "MINOR",
             changeSummary: "First issue.",
-            body: kind === "SOP" ? EMPTY_SOP : EMPTY_RA,
-            contentHash: contentHash(kind === "SOP" ? EMPTY_SOP : EMPTY_RA),
+            body: startingBody,
+            contentHash: contentHash(startingBody),
             authoredBy: user.id,
           })
           .returning();
@@ -63,7 +73,7 @@ export async function createDocument(
         await appendEvent(tx, {
           tenantId: user.tenantId, streamId: doc.id, streamType: "document",
           eventType: "DocumentCreated",
-          payload: { kind, reference, title, machineId },
+          payload: { kind, reference, title, machineId, templateId: templateId || null },
           actorId: user.id,
         });
 
@@ -84,7 +94,11 @@ export async function createDocument(
 
 /** SOP-PB-01, SOP-PB-01-2, RA-SITE-003 - readable and unique per tenant. */
 async function nextReference(tx: Tx, tenantId: string, kind: string, machineId: string | null) {
-  const prefix = kind === "SOP" ? "SOP" : "RA";
+  const prefix =
+    kind === "SOP" ? "SOP"
+    : kind === "RISK_ASSESSMENT" ? "RA"
+    : kind === "TRAINING_DOC" ? "PT"
+    : "IND";
   let base: string;
 
   if (machineId) {
@@ -157,7 +171,7 @@ export async function createDraftRevision(
             tenantId: user.tenantId, documentId, revision: nextNumber,
             status: "DRAFT", changeClass: "MINOR", changeSummary: "",
             // Start from what is in force, so a revision is an edit, not a rewrite.
-            body: current?.body ?? (doc.kind === "SOP" ? EMPTY_SOP : EMPTY_RA),
+            body: current?.body ?? emptyBodyFor(doc.kind as DocumentKind),
             contentHash: current?.contentHash ?? "",
             authoredBy: user.id,
           })
@@ -203,8 +217,7 @@ export async function saveDraft(
         return { error: "The document content could not be read." };
       }
 
-      const schemaFor = rev.kind === "SOP" ? sopBodySchema : raBodySchema;
-      const result = schemaFor.safeParse(parsedBody);
+      const result = schemaFor(rev.kind as DocumentKind).safeParse(parsedBody);
       if (!result.success) {
         return { error: result.error.issues[0]?.message ?? "Check the document for missing details." };
       }
@@ -305,8 +318,7 @@ export async function publishRevision(
         }
       }
 
-      const schemaFor = rev.kind === "SOP" ? sopBodySchema : raBodySchema;
-      const parsed = schemaFor.safeParse(candidate);
+      const parsed = schemaFor(rev.kind as DocumentKind).safeParse(candidate);
       if (!parsed.success) {
         return { error: `Cannot publish: ${parsed.error.issues[0]?.message}` };
       }

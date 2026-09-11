@@ -144,3 +144,53 @@ CREATE POLICY tenant_isolation ON auth_sessions
     SELECT 1 FROM users u
     WHERE u.id = auth_sessions.user_id AND u.tenant_id = app_current_tenant()
   ));
+
+-- ---------------------------------------------------------------------------
+-- First-run setup.
+--
+-- Creating the first organisation necessarily happens before any tenant
+-- exists, so it cannot go through the policies either. This function refuses
+-- once any organisation is present, which makes it a one-time door rather than
+-- a standing bypass.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION tt_has_organisation() RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (SELECT 1 FROM tenants);
+$$;
+
+CREATE OR REPLACE FUNCTION tt_bootstrap_organisation(
+  p_org_name      text,
+  p_slug          text,
+  p_site_name     text,
+  p_user_name     text,
+  p_email         text,
+  p_password_hash text,
+  p_pin_hash      text
+)
+RETURNS TABLE (tenant_id uuid, user_id uuid)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_tenant uuid;
+  v_user   uuid;
+BEGIN
+  IF EXISTS (SELECT 1 FROM tenants) THEN
+    RAISE EXCEPTION 'An organisation has already been set up.'
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+
+  INSERT INTO tenants (name, slug, site_name)
+  VALUES (p_org_name, p_slug, NULLIF(p_site_name, ''))
+  RETURNING id INTO v_tenant;
+
+  INSERT INTO users (tenant_id, email, name, role, status, password_hash, pin_hash, started_on)
+  VALUES (v_tenant, lower(p_email), p_user_name, 'ADMIN', 'ACTIVE',
+          p_password_hash, p_pin_hash, current_date)
+  RETURNING id INTO v_user;
+
+  RETURN QUERY SELECT v_tenant, v_user;
+END $$;
+
+REVOKE ALL ON FUNCTION tt_has_organisation() FROM PUBLIC;
+REVOKE ALL ON FUNCTION tt_bootstrap_organisation(text, text, text, text, text, text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION tt_has_organisation() TO tt_app;
+GRANT EXECUTE ON FUNCTION tt_bootstrap_organisation(text, text, text, text, text, text, text) TO tt_app;

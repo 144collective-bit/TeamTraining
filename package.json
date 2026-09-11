@@ -10,8 +10,6 @@
     "typecheck": "tsc --noEmit",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
-    "db:seed": "tsx --tsconfig tsconfig.json src/db/seed.ts",
-    "db:reset": "tsx src/db/reset.ts",
     "verify": "tsx --tsconfig tsconfig.json scripts/verify-integrity.ts",
     "e2e": "node e2e/write-path.mjs",
     "e2e:authoring": "node e2e/authoring.mjs",
@@ -20,7 +18,9 @@
     "check": "npm run typecheck && npm test && npm run verify && npm run test:isolation",
     "test:isolation": "tsx --tsconfig tsconfig.json scripts/tenant-isolation.ts",
     "db:sql": "node scripts/apply-sql.mjs",
-    "db:setup": "npm run db:push && npm run db:sql && npm run db:seed"
+    "db:setup": "npm run db:push && npm run db:sql",
+    "db:demo": "tsx --tsconfig tsconfig.json src/db/demo.ts",
+    "e2e:first-run": "node e2e/first-run.mjs"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

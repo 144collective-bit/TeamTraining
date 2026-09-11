@@ -6,8 +6,10 @@ import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
 import { SopDocument } from "@/components/sop-document";
 import { RaDocument } from "@/components/ra-document";
+import { TrainingDocument } from "@/components/training-document";
+import { InductionDocument } from "@/components/induction-document";
 import { ReviseButton } from "@/components/revise-button";
-import { readSop, readRa } from "@/lib/documents";
+import { readSop, readRa, readTraining, readInduction } from "@/lib/documents";
 import { atLeast } from "@/lib/state-machine";
 import { formatDate, DOC_KIND_META, CHANGE_CLASS_META } from "@/lib/competence";
 import { routes } from "@/lib/routes";
@@ -22,7 +24,6 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
 
   const { doc, revisions } = data;
   const canEdit = atLeast(user.role, "MANAGER");
-  const isSop = doc.kind === "SOP";
 
   const published = revisions.find((r) => r.status === "PUBLISHED");
   const draft = revisions.find((r) => r.status === "DRAFT");
@@ -84,9 +85,20 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
           )}
 
           {shown ? (
-            isSop
-              ? <SopDocument body={readSop(shown.body)} meta={meta} draft={shown.status === "DRAFT"} />
-              : <RaDocument body={readRa(shown.body)} meta={meta} draft={shown.status === "DRAFT"} />
+            <>
+              {doc.kind === "SOP" && (
+                <SopDocument body={readSop(shown.body)} meta={meta} draft={shown.status === "DRAFT"} />
+              )}
+              {doc.kind === "RISK_ASSESSMENT" && (
+                <RaDocument body={readRa(shown.body)} meta={meta} draft={shown.status === "DRAFT"} />
+              )}
+              {doc.kind === "TRAINING_DOC" && (
+                <TrainingDocument body={readTraining(shown.body)} meta={meta} draft={shown.status === "DRAFT"} />
+              )}
+              {doc.kind === "INDUCTION" && (
+                <InductionDocument body={readInduction(shown.body)} meta={meta} draft={shown.status === "DRAFT"} />
+              )}
+            </>
           ) : (
             <p className="card card-pad text-center text-[13px] text-[var(--ink-faint)]">
               This document has no revisions yet.

@@ -4,7 +4,8 @@ import { requireUser } from "@/lib/session";
 import { atLeast } from "@/lib/state-machine";
 import { DocumentEditor } from "@/components/document-editor";
 import { getDraftRevision } from "@/lib/queries";
-import { readSop, readRa } from "@/lib/documents";
+import { DOC_KIND_META } from "@/lib/competence";
+import { readSop, readRa, readTraining, readInduction, type DocumentKind } from "@/lib/documents";
 import { routes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,7 @@ export default async function EditRevisionPage({
   // A published revision is frozen; there is nothing to edit.
   if (row.status !== "DRAFT") redirect(routes.document(id));
 
-  const isSop = row.kind === "SOP";
+  const kind = row.kind as DocumentKind;
 
   return (
     <div className="p-5 sm:p-7 max-w-5xl">
@@ -37,7 +38,7 @@ export default async function EditRevisionPage({
 
       <header className="mt-3 mb-5">
         <p className="label">
-          {isSop ? "Standard operating procedure" : "Risk assessment"} · Draft revision {row.revision}
+          {DOC_KIND_META[kind]?.label} · Draft revision {row.revision}
         </p>
         <h1 className="mt-1 text-[24px] font-semibold tracking-tight leading-tight">
           {row.title || "Untitled document"}
@@ -50,12 +51,17 @@ export default async function EditRevisionPage({
           revisionId: row.revisionId,
           reference: row.reference,
           revision: row.revision,
-          kind: isSop ? "SOP" : "RISK_ASSESSMENT",
+          kind,
           machineCode: row.machineCode,
           isFirstIssue: row.revision === 1,
         }}
         initialTitle={row.title}
-        initialBody={isSop ? readSop(row.body) : readRa(row.body)}
+        initialBody={
+          kind === "SOP" ? readSop(row.body)
+          : kind === "RISK_ASSESSMENT" ? readRa(row.body)
+          : kind === "TRAINING_DOC" ? readTraining(row.body)
+          : readInduction(row.body)
+        }
         initialSummary={row.changeSummary ?? ""}
       />
     </div>

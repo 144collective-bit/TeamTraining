@@ -28,7 +28,7 @@ async function signIn(email) {
     await p.waitForURL('**/login', { timeout: 15000 });
   }
   await p.fill('#email', email);
-  await p.fill('#password', 'protektor');
+  await p.fill('#password', 'demo-password-1');
   await Promise.all([p.waitForURL('**/dashboard', { timeout: 15000 }), p.click('button[type=submit]')]);
 }
 
@@ -37,7 +37,7 @@ const step = async (name, fn) => {
   catch (e) { console.log(`  FAIL  ${name}\n        ${e.message.split('\n')[0]}`); throw e; }
 };
 
-await signIn('k.bhatti@protektor.example');
+await signIn('k.bhatti@northgate.example');
 
 await step('published SOP renders with step photos', async () => {
   await p.goto(`${BASE}/documents`, { waitUntil: 'domcontentloaded' });
@@ -78,19 +78,24 @@ await step('create a new SOP draft', async () => {
 await step('author steps, upload a photo, save', async () => {
   await p.fill('#purpose', 'Safe use of the deburring bench for finishing cut and formed parts.');
   await p.fill('#step-0', 'Check the bench, extraction and abrasive condition before starting.');
-  // key point + reason
-  await p.locator('button:has-text("Add key point")').first().click();
-  await p.locator('input[aria-label="Key points 1"]').fill('Extraction running and ducting clear.');
-  await p.locator('button:has-text("Add reason")').first().click();
-  await p.locator('input[aria-label="Reasons 1"]').fill('Metal dust is a fire and inhalation risk.');
+
+  // The template prefills several steps, so scope to the first step's card.
+  const firstStep = p.locator('.card', { has: p.locator('#step-0') });
+  await firstStep.locator('button:has-text("Add key point")').click();
+  await firstStep.locator('input[aria-label^="Key points"]').last()
+    .fill('Extraction running and ducting clear.');
+  await firstStep.locator('button:has-text("Add reason")').click();
+  await firstStep.locator('input[aria-label^="Reasons"]').last()
+    .fill('Metal dust is a fire and inhalation risk.');
 
   // upload a real PNG through the picker
-  await p.locator('input[type=file]').first().setInputFiles(
+  await firstStep.locator('input[type=file]').setInputFiles(
     new URL('./fixtures/step-photo.png', import.meta.url).pathname);
   await p.waitForSelector('img[src^="/api/attachments/"]', { timeout: 15000 });
 
   await p.click('button:has-text("Add step")');
-  await p.fill('#step-1', 'Deburr all cut edges, working away from the body.');
+  await p.locator('textarea[id^="step-"]').last()
+    .fill('Deburr all cut edges, working away from the body.');
   await p.fill('#safety', 'Extraction on, eye protection worn, guard in place.');
   await p.fill('#care', 'Never deburr a part held in the hand against the wheel.');
   await p.fill('#summary', 'First issue of the deburring bench procedure.');
@@ -122,7 +127,7 @@ await step('publish the first issue', async () => {
 
   // A second manager approves and publishes it.
   const draftUrl = p.url();
-  await signIn('d.whitfield@protektor.example');
+  await signIn('d.whitfield@northgate.example');
   await p.goto(draftUrl, { waitUntil: 'domcontentloaded' });
   await p.fill('#summary', 'First issue of the deburring bench procedure.');
   await p.click('button:has-text("Publish revision")');
@@ -135,7 +140,7 @@ await step('publish the first issue', async () => {
 // ---------------------------------------------------------------- cascade
 /** One person drafts, a different one approves - as the system requires. */
 async function reviseAndPublish(reference, stepText, changeClassLabel, summary) {
-  await signIn('k.bhatti@protektor.example');
+  await signIn('k.bhatti@northgate.example');
   await p.goto(`${BASE}/documents`, { waitUntil: 'domcontentloaded' });
   await p.click(`a:has-text("${reference}")`);
   await p.waitForURL(/\/documents\/[0-9a-f-]{36}$/);
@@ -148,7 +153,7 @@ async function reviseAndPublish(reference, stepText, changeClassLabel, summary) 
   await p.click('button:has-text("Save draft")');
   await p.waitForSelector('text=/Draft saved at/', { timeout: 20000 });
 
-  await signIn('d.whitfield@protektor.example');
+  await signIn('d.whitfield@northgate.example');
   await p.goto(draftUrl, { waitUntil: 'domcontentloaded' });
   await p.click(`label:has-text("${changeClassLabel}")`);
   await p.fill('#summary', summary);

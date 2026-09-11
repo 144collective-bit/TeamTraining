@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Protektor — Training & Competence",
+  title: "Training & Competence",
   description: "Onboarding, training and competence management for the shop floor.",
 };
 

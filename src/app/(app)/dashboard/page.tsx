@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
-import { getDashboard, getActionList, getActiveTraining, getCoverage } from "@/lib/queries";
+import { getDashboard, getActionList, getActiveTraining, getCoverage, getOrganisation } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
 import { Stat } from "@/components/stat";
 import { STATUS_META, formatDate, daysUntil } from "@/lib/competence";
@@ -22,11 +22,13 @@ export default async function DashboardPage() {
 
   const singlePoints = coverage.filter((c) => c.competent <= 1);
   const firstName = user.name.split(" ")[0];
+  const org = await getOrganisation(user.tenantId);
+  const orgLabel = [org?.name, org?.siteName].filter(Boolean).join(" · ") || "Your organisation";
 
   return (
     <>
       <PageHeader
-        eyebrow="Protektor UK · Kidderminster"
+        eyebrow={orgLabel}
         title={`Good ${greeting()}, ${firstName}`}
         description="Where training stands across the shop floor right now."
       />
