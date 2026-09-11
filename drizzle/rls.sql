@@ -6,34 +6,64 @@
 -- make that impossible rather than merely unlikely.
 --
 -- Two roles:
---   tt        owns the schema. Used for migrations and seeding, and NOT subject
---             to these policies (RLS is not FORCEd), so setup stays simple.
---   tt_app    what the application connects as. No superuser, no BYPASSRLS, so
---             every statement it runs is filtered by the policies below.
+--   the owner   owns the schema. Used for migrations and seeding, and NOT
+--               subject to these policies (RLS is not FORCEd), so setup stays
+--               simple. This is whoever DATABASE_ADMIN_URL authenticates as.
+--   the app     what the application connects as. No superuser, no BYPASSRLS,
+--               so every statement it runs is filtered by the policies below.
+--               This is whoever DATABASE_URL authenticates as.
+--
+-- The application role's name and password are taken from DATABASE_URL rather
+-- than written here — a credential committed to a repository is not a
+-- credential. scripts/apply-sql.mjs extracts them and passes them in as
+-- :app_role and :app_password.
 --
 -- Re-runnable.
 -- ============================================================================
 
+\if :{?app_role}
+\else
+\echo 'app_role was not supplied. Run this through: npm run db:sql'
+\quit 1
+\endif
+
+-- Available to the DO blocks below, which cannot see psql variables because
+-- substitution does not reach inside dollar-quoted strings.
+SET tt.app_role = :'app_role';
+
 -- ---------------------------------------------------------------------------
 -- The application role
 -- ---------------------------------------------------------------------------
+SELECT format(
+  'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE',
+  :'app_role', :'app_password'
+)
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app_role')
+\gexec
+
+-- Belt and braces, in case the role predates this file or was created by hand
+-- with the wrong attributes. Some managed providers do not allow altering
+-- another role's superuser attributes; if so, say something rather than fail —
+-- npm run test:isolation checks the outcome regardless.
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tt_app') THEN
-    CREATE ROLE tt_app LOGIN PASSWORD 'tt_app' NOSUPERUSER NOCREATEDB NOCREATEROLE;
-  END IF;
+  EXECUTE format(
+    'ALTER ROLE %I NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE',
+    current_setting('tt.app_role')
+  );
+EXCEPTION WHEN insufficient_privilege OR feature_not_supported THEN
+  RAISE NOTICE
+    'Could not set attributes on %. Confirm by hand that it has NOSUPERUSER and NOBYPASSRLS, then run: npm run test:isolation',
+    current_setting('tt.app_role');
 END $$;
 
--- Explicitly, in case the role predates this file.
-ALTER ROLE tt_app NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
-
-GRANT USAGE ON SCHEMA public TO tt_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO tt_app;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO tt_app;
+GRANT USAGE ON SCHEMA public TO :"app_role";
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO :"app_role";
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO :"app_role";
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO tt_app;
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"app_role";
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  GRANT USAGE, SELECT ON SEQUENCES TO tt_app;
+  GRANT USAGE, SELECT ON SEQUENCES TO :"app_role";
 
 -- ---------------------------------------------------------------------------
 -- The tenant in scope for the current transaction.
@@ -45,7 +75,7 @@ CREATE OR REPLACE FUNCTION app_current_tenant() RETURNS uuid AS $$
   SELECT NULLIF(current_setting('app.tenant_id', true), '')::uuid;
 $$ LANGUAGE sql STABLE;
 
-GRANT EXECUTE ON FUNCTION app_current_tenant() TO tt_app;
+GRANT EXECUTE ON FUNCTION app_current_tenant() TO :"app_role";
 
 -- ---------------------------------------------------------------------------
 -- Pre-authentication lookups.
@@ -92,10 +122,10 @@ REVOKE ALL ON FUNCTION tt_lookup_login(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION tt_resolve_session(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION tt_create_session(text, uuid, timestamptz) FROM PUBLIC;
 REVOKE ALL ON FUNCTION tt_destroy_session(text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION tt_lookup_login(text) TO tt_app;
-GRANT EXECUTE ON FUNCTION tt_resolve_session(text) TO tt_app;
-GRANT EXECUTE ON FUNCTION tt_create_session(text, uuid, timestamptz) TO tt_app;
-GRANT EXECUTE ON FUNCTION tt_destroy_session(text) TO tt_app;
+GRANT EXECUTE ON FUNCTION tt_lookup_login(text) TO :"app_role";
+GRANT EXECUTE ON FUNCTION tt_resolve_session(text) TO :"app_role";
+GRANT EXECUTE ON FUNCTION tt_create_session(text, uuid, timestamptz) TO :"app_role";
+GRANT EXECUTE ON FUNCTION tt_destroy_session(text) TO :"app_role";
 
 -- ---------------------------------------------------------------------------
 -- Policies
@@ -192,5 +222,5 @@ END $$;
 
 REVOKE ALL ON FUNCTION tt_has_organisation() FROM PUBLIC;
 REVOKE ALL ON FUNCTION tt_bootstrap_organisation(text, text, text, text, text, text, text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION tt_has_organisation() TO tt_app;
-GRANT EXECUTE ON FUNCTION tt_bootstrap_organisation(text, text, text, text, text, text, text) TO tt_app;
+GRANT EXECUTE ON FUNCTION tt_has_organisation() TO :"app_role";
+GRANT EXECUTE ON FUNCTION tt_bootstrap_organisation(text, text, text, text, text, text, text) TO :"app_role";

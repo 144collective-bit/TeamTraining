@@ -27,22 +27,59 @@ async function main() {
   check("the application role is not a superuser", role.rolsuper === false);
   check("the application role cannot bypass RLS", role.rolbypassrls === false);
 
-  const [victim] = await admin.select().from(schema.tenants).limit(1);
-  if (!victim) throw new Error("No seeded tenant — run npm run db:seed first.");
+  // Two throwaway organisations, both created here so this runs against any
+  // database — including a freshly provisioned production one with no data.
+  const stamp = Date.now();
 
-  // A second customer on the same database.
+  const [victim] = await admin
+    .insert(schema.tenants)
+    .values({ name: "Isolation Check A", slug: `isolation-a-${stamp}` })
+    .returning();
+
   const [intruder] = await admin
     .insert(schema.tenants)
-    .values({ name: "Rival Fabrications", slug: `rival-${Date.now()}` })
+    .values({ name: "Isolation Check B", slug: `isolation-b-${stamp}` })
+    .returning();
+
+  const [victimUser] = await admin
+    .insert(schema.users)
+    .values({
+      tenantId: victim.id,
+      email: `isolation-a-${stamp}@example.invalid`,
+      name: "Check A Manager",
+      role: "ADMIN",
+    })
     .returning();
 
   const [intruderUser] = await admin
     .insert(schema.users)
     .values({
       tenantId: intruder.id,
-      email: `rival-${Date.now()}@example.invalid`,
-      name: "Rival Manager",
+      email: `isolation-b-${stamp}@example.invalid`,
+      name: "Check B Manager",
       role: "ADMIN",
+    })
+    .returning();
+
+  // Something of the victim's for the intruder to try to reach.
+  const [victimArea] = await admin
+    .insert(schema.areas)
+    .values({ tenantId: victim.id, name: "Check A Area", code: `ICA${stamp % 10000}` })
+    .returning();
+
+  const [victimMachine] = await admin
+    .insert(schema.machines)
+    .values({
+      tenantId: victim.id, areaId: victimArea.id,
+      code: `IC${stamp % 10000}`, name: "Check A Machine",
+    })
+    .returning();
+
+  const [target] = await admin
+    .insert(schema.competenceRecords)
+    .values({
+      tenantId: victim.id, userId: victimUser.id, machineId: victimMachine.id,
+      status: "IN_TRAINING", level: "SUPERVISED",
     })
     .returning();
 
@@ -75,22 +112,13 @@ async function main() {
     /* -------------------------------------------------------------- *
      * Targeted reads by known primary key
      * -------------------------------------------------------------- */
-    const [target] = await admin
-      .select()
-      .from(schema.competenceRecords)
-      .where(eq(schema.competenceRecords.tenantId, victim.id))
-      .limit(1);
-
     const byId = await asTenant(intruder.id, (tx) =>
       tx.select().from(schema.competenceRecords).where(eq(schema.competenceRecords.id, target.id)));
     check("cannot fetch another tenant's record by its id", byId.length === 0);
 
-    const [targetAttachment] = await admin.select().from(schema.attachments).limit(1);
-    if (targetAttachment) {
-      const img = await asTenant(intruder.id, (tx) =>
-        tx.select().from(schema.attachments).where(eq(schema.attachments.id, targetAttachment.id)));
-      check("cannot fetch another tenant's photograph by its id", img.length === 0);
-    }
+    const machineById = await asTenant(intruder.id, (tx) =>
+      tx.select().from(schema.machines).where(eq(schema.machines.id, victimMachine.id)));
+    check("cannot fetch another tenant's machine by its id", machineById.length === 0);
 
     /* -------------------------------------------------------------- *
      * Reads with no tenant context at all
@@ -146,8 +174,9 @@ async function main() {
     } catch { cannotGrant = true; }
     check("the application role cannot grant itself BYPASSRLS", cannotGrant);
   } finally {
-    await admin.delete(schema.users).where(eq(schema.users.id, intruderUser.id));
+    // Cascades remove the users, areas, machines and competence records.
     await admin.delete(schema.tenants).where(eq(schema.tenants.id, intruder.id));
+    await admin.delete(schema.tenants).where(eq(schema.tenants.id, victim.id));
   }
 
   console.log(failures === 0
