@@ -138,7 +138,9 @@ export default async function DashboardPage() {
             </p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
+            {/* min-width, so narrow screens scroll the table instead of
+                crushing seven columns into 390px. */}
+            <table className="w-full min-w-[36rem] text-[13px]">
               <thead>
                 <tr className="border-b" style={{ borderColor: "var(--border)" }}>
                   <Th className="text-left pl-5">Machine</Th>

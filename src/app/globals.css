@@ -272,6 +272,23 @@ body { margin: 0; font-size: 14px; line-height: 1.5; }
 /* Catches the rotated label of the final column so it isn't clipped. */
 .col-spacer { width: 9rem; border-bottom: 1px solid var(--border); }
 
+/* ---------------------------------------------------------------------------
+   Phones.
+
+   The matrix is a wide grid on a narrow screen, so the fixed name column has
+   to give up room: at 15rem it left a 390px phone showing a single machine.
+   The rotated labels are machine codes only at this width (see matrix-grid),
+   so the header band can be less than half as tall.
+   --------------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  .matrix .name-col { min-width: 9.5rem; }
+  .matrix .name-col.col-head { padding-left: 1rem; padding-right: 0.5rem; }
+  .col-head { height: 5.5rem; width: 3rem; }
+  .col-spacer { width: 3.5rem; }
+  .cell { width: 3rem; height: 3rem; }
+  .matrix-wrap { max-height: calc(100vh - 10rem); min-height: 21rem; }
+}
+
 @media print {
   .no-print { display: none !important; }
   .matrix-wrap { max-height: none; overflow: visible; border: none; }

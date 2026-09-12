@@ -214,7 +214,9 @@ export function MatrixGrid({
                   <div className="col-head-inner">
                     <Link href={routes.machine(m.id)} className="hover:underline">
                       <span className="font-mono font-bold">{m.code}</span>
-                      <span className="text-[var(--ink-faint)]"> · {m.name}</span>
+                      {/* On a phone the code alone keeps the header band short
+                          enough to leave the grid itself worth looking at. */}
+                      <span className="hidden sm:inline text-[var(--ink-faint)]"> · {m.name}</span>
                     </Link>
                   </div>
                 </th>
