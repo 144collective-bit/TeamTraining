@@ -35,14 +35,18 @@ function makeDb(url: string, max: number) {
     connect_timeout: 10,
     /**
      * Transaction-mode connection poolers (PgBouncer, and the Neon and
-     * Supabase poolers) do not support prepared statements. Serverless
-     * deployments go through one, so this has to be off.
+     * Supabase poolers) do not support prepared statements, so this defaults
+     * off: the failure behind a pooler is real errors, while the cost of
+     * leaving it off is only re-parsing each query.
      *
-     * The tenant context is safe across such a pooler because it is set with
+     * On a direct connection — a database on the same host, say — set
+     * DATABASE_PREPARE=true and get them back.
+     *
+     * The tenant context is safe either way: it is set with
      * `set_config(..., is_local => true)` inside a transaction, and transaction
      * pooling holds one server connection for the whole transaction.
      */
-    prepare: false,
+    prepare: process.env.DATABASE_PREPARE === "true",
   });
   return drizzle(client, { schema });
 }

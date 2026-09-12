@@ -1,0 +1,19 @@
+node_modules
+.next
+.git
+
+# Secrets. The builder stage copies the whole tree, so anything left here is
+# baked into an image layer and survives being deleted later.
+.env
+.env.*
+!.env.production.example
+
+# Database dumps.
+backups
+
+# Not needed at runtime or to migrate.
+e2e
+test
+docs
+*.md
+!README.md

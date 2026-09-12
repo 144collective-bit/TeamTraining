@@ -1,11 +1,15 @@
 /**
  * Adversarial cross-tenant test.
  *
- * Creates a second tenant alongside the seeded one and, connecting as the
- * application role, tries every way it can think of to read or write across the
- * boundary. Every attempt must come back empty or refused.
+ * Stands up two throwaway tenants of its own and, connecting as the application
+ * role, tries every way it can think of to read or write across the boundary.
+ * Every attempt must come back empty or refused. Both tenants are removed
+ * afterwards.
  *
- *   npm run db:seed && npm run test:isolation
+ * Needs nothing in the database beforehand, so it is the first thing to run
+ * against a new deployment:
+ *
+ *   npm run test:isolation
  */
 import "dotenv/config";
 import { db, asTenant, getAdminDb, schema } from "@/db";

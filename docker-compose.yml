@@ -1,0 +1,90 @@
+# =============================================================================
+# Single-host deployment: Postgres, the application, and Caddy in front.
+#
+#   cp .env.production.example .env.production   # then fill it in
+#   docker compose --env-file .env.production up -d --build
+#
+# Caddy obtains and renews the TLS certificate on its own, so there is no
+# certbot cron to forget about.
+# =============================================================================
+
+name: teamtraining
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_OWNER:?set DB_OWNER}
+      POSTGRES_PASSWORD: ${DB_OWNER_PASSWORD:?set DB_OWNER_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-teamtraining}
+      # Deterministic collation, so ordering does not change under a base-image
+      # upgrade and quietly corrupt text indexes.
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    # Not published to the host: nothing outside this network needs to reach
+    # the database, and an exposed Postgres is found by scanners within hours.
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # Runs to completion on every deploy, before the application starts.
+  migrate:
+    build:
+      context: .
+      target: migrator
+    environment:
+      DATABASE_URL: postgres://${DB_APP_USER:-tt_app}:${DB_APP_PASSWORD:?set DB_APP_PASSWORD}@db:5432/${DB_NAME:-teamtraining}
+      DATABASE_ADMIN_URL: postgres://${DB_OWNER}:${DB_OWNER_PASSWORD}@db:5432/${DB_NAME:-teamtraining}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    environment:
+      # The application role. Not the owner — the owner is not subject to the
+      # row-level security policies.
+      DATABASE_URL: postgres://${DB_APP_USER:-tt_app}:${DB_APP_PASSWORD}@db:5432/${DB_NAME:-teamtraining}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      # A direct connection, so prepared statements are safe and worth having.
+      DATABASE_PREPARE: "true"
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:

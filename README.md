@@ -49,7 +49,7 @@ seeding. Row-level security is worthless if the app connects as a superuser, so
 the split is not optional.
 
 `npm run db:setup` runs the three steps individually available as `db:push`
-(schema), `db:sql` (triggers and policies) and `db:seed`.
+(schema), `db:sql` (triggers and policies) and `db:demo`.
 
 ### Scripts
 
@@ -166,6 +166,29 @@ docs/               Research and planning (see docs/README below)
 See [DEPLOY.md](DEPLOY.md). The short version: the app needs Postgres with two
 roles, and `npm run db:sql` applied, before it can sign anyone in.
 
+Two routes are supported. **One VPS** (Hostinger, Hetzner, any Ubuntu box):
+
+```bash
+git clone https://github.com/144collective-bit/TeamTraining.git /opt/teamtraining
+cd /opt/teamtraining
+cp .env.production.example .env.production   # fill in, then chmod 600
+docker compose --env-file .env.production up -d --build
+```
+
+That brings up Postgres, runs the migrations to completion, starts the app and
+puts Caddy in front of it with an automatic certificate. `scripts/deploy.sh`
+does subsequent deploys, `scripts/backup.sh` is for cron, and
+[RESTORE.md](RESTORE.md) covers getting the data back.
+
+**Managed Postgres** (Vercel plus Neon or Supabase) is the other route — same
+two-role setup, the platform does the rest.
+
+```
+Caddy :443  ──►  app :3000  ──►  Postgres :5432
+                     │                  ▲
+                     └── /api/health ───┘   (healthcheck, and Caddy's probe)
+```
+
 ## Planning and research
 
 The design decisions behind this are documented in [`docs/`](docs/):
@@ -261,7 +284,7 @@ consequence of the procedure having moved on beneath them.
 | `npm run e2e:first-run` | Setting up an organisation from nothing, then adding plant, people and a document |
 
 The e2e suites need a running server (`npm run build && npm run start`) and a fresh
-`npm run db:seed`.
+`npm run db:demo`.
 
 ## Process training sign-offs
 

@@ -2,7 +2,7 @@
  * End-to-end walk of the training write path against a running server.
  *
  *   npm run build && npm run start   (in one terminal)
- *   npm run db:seed && npm run e2e   (in another)
+ *   npm run db:demo && npm run e2e   (in another)
  *
  * Covers: start training → daily sign-off → assessment → three signatures →
  * competence granted, plus PIN rejection, voiding an entry, and induction.

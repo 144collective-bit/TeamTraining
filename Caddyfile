@@ -1,0 +1,28 @@
+# Caddy obtains and renews the certificate automatically. Set SITE_ADDRESS to
+# your domain (e.g. training.example.co.uk); use :80 to run without TLS while
+# testing, before DNS points at the box.
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# Uploaded photographs can be a few megabytes; the app caps them at 8.
+	request_body {
+		max_size 12MB
+	}
+
+	header {
+		# The app is only ever used directly, never embedded.
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		# Two years, and only once TLS is actually working — remove this line
+		# if you are serving over plain HTTP while testing.
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		-Server
+	}
+
+	reverse_proxy app:3000 {
+		health_uri /api/health
+		health_interval 30s
+	}
+}

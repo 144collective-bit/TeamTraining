@@ -5,6 +5,165 @@ two roles and the SQL in `drizzle/` applied. That setup is not optional: the
 security model depends on the application connecting as a role that cannot
 bypass row-level security.
 
+There are two supported routes:
+
+| | **A — one VPS** | **B — managed Postgres** |
+|---|---|---|
+| Where | Hostinger, Hetzner, any Ubuntu box | Vercel + Neon/Supabase |
+| Database | In the stack, on the same machine | The provider's |
+| TLS | Caddy, automatic | The platform's |
+| Backups | `scripts/backup.sh` — **yours to run** | The provider's, usually |
+| Prepared statements | On (direct connection) | Off (pooler) |
+| Read | [Route A](#route-a--one-vps) | [Route B](#route-b--managed-postgres), from step 1 |
+
+Route A is the one to take if the records must stay on hardware you control, or
+if you would rather pay for one box than for a platform and a database.
+Everything in Route B still applies underneath it — Route A just runs those same
+steps for you inside containers.
+
+---
+
+# Route A — one VPS
+
+Tested against Ubuntu 22.04/24.04 with 2 vCPU and 4 GB of memory, which is
+comfortable for a few hundred people. The stack is four containers: Postgres,
+a one-shot migration job, the app, and Caddy for TLS.
+
+## A1. Point the domain at the box
+
+An `A` record for, say, `training.yourcompany.co.uk` to the server's IPv4
+address. Do this first — Caddy will not get a certificate until DNS resolves.
+
+## A2. Install Docker
+
+```bash
+ssh root@<your-server-ip>
+curl -fsSL https://get.docker.com | sh
+```
+
+Then close the machine up. This is a box on the public internet holding
+personnel records:
+
+```bash
+ufw default deny incoming
+ufw allow OpenSSH
+ufw allow 80,443/tcp
+ufw enable
+```
+
+Nothing else needs to be reachable. Postgres is not published to the host at
+all — the containers talk to it over the internal network.
+
+## A3. Get the code and fill in the secrets
+
+```bash
+git clone https://github.com/144collective-bit/TeamTraining.git /opt/teamtraining
+cd /opt/teamtraining
+cp .env.production.example .env.production
+```
+
+Edit `.env.production`. Every blank in it matters:
+
+| Variable | What to put |
+|---|---|
+| `SITE_ADDRESS` | Your domain, e.g. `training.yourcompany.co.uk`. Caddy gets the certificate for exactly this name |
+| `DB_NAME` | `teamtraining` is fine |
+| `DB_OWNER` / `DB_OWNER_PASSWORD` | The schema owner. Migrations only |
+| `DB_APP_USER` / `DB_APP_PASSWORD` | The role the app connects as. **Must differ from the owner** — see step 2 below for why |
+| `SESSION_SECRET` | `openssl rand -base64 32` |
+
+```bash
+chmod 600 .env.production
+```
+
+Two passwords and a session secret. Generate all three, and keep a copy
+somewhere other than this machine — `RESTORE.md` explains what each one costs
+you if it is lost.
+
+## A4. Bring it up
+
+```bash
+docker compose --env-file .env.production up -d --build
+```
+
+The first run builds two images, starts Postgres, runs the migration container
+to completion — schema, then the triggers and row-level security policies — and
+only then starts the app. If migration fails, the app never starts against a
+half-migrated database.
+
+```bash
+docker compose --env-file .env.production ps          # all up, db healthy
+docker compose --env-file .env.production logs -f app
+curl -sS https://training.yourcompany.co.uk/api/health
+```
+
+`{"status":"ok","database":"ok"}` means the app is up and can reach the
+database. That is the same endpoint Caddy and the container healthcheck poll.
+
+## A5. Prove the isolation took effect
+
+Before anyone signs in:
+
+```bash
+docker compose --env-file .env.production run --rm migrate npm run test:isolation
+```
+
+Read [step 6](#6-verify) for what it is actually checking. If the first two
+lines fail, the app is connecting as the owner and there is no tenant isolation
+— stop and fix `.env.production`.
+
+## A6. Create the organisation
+
+Open `https://training.yourcompany.co.uk`. An empty database sends you to a
+one-time setup page that creates your organisation and your administrator
+account, then closes permanently. There are no default credentials.
+
+## A7. Back it up — before it matters
+
+```bash
+crontab -e
+```
+
+```cron
+0 2 * * * cd /opt/teamtraining && ./scripts/backup.sh >> backups/backup.log 2>&1
+```
+
+Each run dumps the database, checks the dump is readable by `pg_restore`, and
+prunes ones older than 30 days while always keeping the newest.
+
+**The dumps land on the same machine as the database.** That covers a mistake,
+not a lost server. `scripts/backup.sh` has a commented block near the bottom for
+copying each dump offsite — set one up, and then read `RESTORE.md` and actually
+rehearse a restore once. This system exists so that a competence record still
+stands up in three years.
+
+## A8. Deploying a change
+
+```bash
+cd /opt/teamtraining
+./scripts/deploy.sh
+```
+
+Backs up, fetches, rebuilds, migrates, restarts, and waits for the health
+endpoint. A failed migration stops it before the new app starts.
+
+## Notes on Route A
+
+- **Prepared statements are on** (`DATABASE_PREPARE=true` in the compose file).
+  The app talks to Postgres directly, with no transaction pooler in between, so
+  they are both safe and worth having.
+- **Postgres is initialised with `--locale=C`**, so text ordering cannot change
+  under a base-image upgrade and quietly corrupt an index.
+- **Caddy renews the certificate itself.** There is no certbot cron to forget.
+- **Upload size** is capped at 12 MB by Caddy and 8 MB by the app.
+- Hostinger's one-click "Docker" or "Ubuntu" VPS images both work. The managed
+  *shared hosting* plans do not — they run PHP, not Node, and give you MySQL
+  rather than Postgres.
+
+---
+
+# Route B — managed Postgres
+
 ## 1. Provision Postgres
 
 Any Postgres 14+ works. On Vercel, the marketplace options (Neon, Supabase) are
@@ -114,17 +273,29 @@ running once there is data.
 
 - Use the **pooled** connection string. Serverless instances each open their own
   connections and a direct string will exhaust the database's limit.
-- Prepared statements are disabled (`prepare: false` in `src/db/index.ts`)
-  because transaction-mode poolers do not support them.
+- Prepared statements are off by default, because transaction-mode poolers do
+  not support them. Leave `DATABASE_PREPARE` unset here. (On a direct
+  connection — Route A — set it to `true`.)
 - The tenant context survives pooling because it is set with
   `set_config(..., is_local => true)` inside a transaction, and transaction
   pooling holds one server connection for the whole transaction.
 
-## Before this is public
+---
 
-A real installation has no default credentials — the first administrator sets
+# Before this is public
+
+Either route. A real installation has no default credentials — the first administrator sets
 their own password during setup, and everyone else is added from inside the app.
 
 The **demo** fixture is different: every account in it shares one published
-password. If you load it, keep the deployment behind Vercel Authentication or
-password protection.
+password. If you load it, keep the deployment behind Vercel Authentication,
+HTTP basic auth in the Caddyfile, or a firewall — and never load it into a
+database that holds real records, because `db:demo` truncates every table
+first.
+
+And run the checks once against the real deployment:
+
+```bash
+npm run test:isolation    # tenant isolation, on an empty database
+npm run verify            # hash chains and database guards, once there is data
+```

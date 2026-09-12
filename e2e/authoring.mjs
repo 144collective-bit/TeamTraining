@@ -2,7 +2,7 @@
  * End-to-end walk of controlled-document authoring against a running server.
  *
  *   npm run build && npm run start   (in one terminal)
- *   npm run db:seed && npm run e2e:authoring   (in another)
+ *   npm run db:demo && npm run e2e:authoring   (in another)
  *
  * Covers: rendering a published SOP and risk assessment, creating a draft,
  * authoring steps with a photograph, previewing, separation of duties on

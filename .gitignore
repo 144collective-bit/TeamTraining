@@ -4,6 +4,10 @@ out/
 build/
 .env
 .env.local
+# Production secrets live on the server only.
+.env.production
+# Database dumps. Never in git.
+backups/
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store

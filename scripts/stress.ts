@@ -1,7 +1,11 @@
 /**
- * Stress and concurrency checks against a seeded database.
+ * Stress and concurrency checks against a database with data in it.
  *
- *   npm run db:seed && npm run stress
+ * It needs an organisation that already has people, machines and training
+ * records, so run it against the demonstration fixture rather than a fresh
+ * install:
+ *
+ *   npm run db:demo && npm run stress
  *
  * Looks for the failure modes that only show up under load or contention:
  * racing appends to one event stream, matrix query cost at real scale, and
@@ -32,7 +36,7 @@ async function time<T>(fn: () => Promise<T>): Promise<[T, number]> {
 
 async function main() {
   const [tenant] = await db.select().from(schema.tenants).limit(1);
-  if (!tenant) throw new Error("No tenant — run npm run db:seed first.");
+  if (!tenant) throw new Error("No organisation — run npm run db:demo first.");
   const tenantId = tenant.id;
 
   const [actor] = await db
@@ -40,6 +44,7 @@ async function main() {
     .from(schema.users)
     .where(and(eq(schema.users.tenantId, tenantId), eq(schema.users.role, "ADMIN")))
     .limit(1);
+  if (!actor) throw new Error("No administrator — run npm run db:demo first.");
 
   /* ---------------------------------------------------------------- *
    * 1. Racing appends to a single event stream
@@ -50,6 +55,12 @@ async function main() {
       .from(schema.competenceRecords)
       .where(eq(schema.competenceRecords.tenantId, tenantId))
       .limit(1);
+    if (!record) {
+      throw new Error(
+        "No training records to race appends against. This runs against the " +
+          "demonstration fixture — npm run db:demo — not a fresh install.",
+      );
+    }
 
     const CONCURRENCY = 25;
     const outcomes = await Promise.allSettled(
@@ -108,6 +119,7 @@ async function main() {
       .from(schema.areas)
       .where(eq(schema.areas.tenantId, tenantId))
       .limit(1);
+    if (!area) throw new Error("No areas — run npm run db:demo first.");
 
     const bulkUsers = await db
       .insert(schema.users)
