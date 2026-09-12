@@ -199,8 +199,18 @@ export function MatrixGrid({
               <th scope="col" className="name-col col-head text-left align-bottom px-4 pb-3">
                 <span className="label">Operator</span>
               </th>
-              {visibleMachines.map((m) => (
-                <th key={m.id} scope="col" className="col-head">
+              {visibleMachines.map((m, i) => (
+                <th
+                  key={m.id}
+                  scope="col"
+                  className="col-head"
+                  /* The rotated label overhangs the columns to its right, and
+                     every sticky header cell carries an opaque background at
+                     the same depth — so the next column used to paint over it,
+                     cutting each machine name off mid-word. Descending z-index
+                     keeps each label above the headers it reaches across. */
+                  style={{ zIndex: 4 + visibleMachines.length - i }}
+                >
                   <div className="col-head-inner">
                     <Link href={routes.machine(m.id)} className="hover:underline">
                       <span className="font-mono font-bold">{m.code}</span>

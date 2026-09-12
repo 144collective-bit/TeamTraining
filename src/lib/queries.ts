@@ -492,7 +492,10 @@ export async function getMachine(tenantId: string, machineId: string) {
 const currentRevision = {
   revisionId: sql<string | null>`(select r.id from ${schema.documentRevisions} r where r.document_id = ${schema.documents.id} and r.status = 'PUBLISHED' limit 1)`,
   revision: sql<number | null>`(select r.revision from ${schema.documentRevisions} r where r.document_id = ${schema.documents.id} and r.status = 'PUBLISHED' limit 1)`.mapWith(Number),
-  publishedAt: sql<Date | null>`(select r.published_at from ${schema.documentRevisions} r where r.document_id = ${schema.documents.id} and r.status = 'PUBLISHED' limit 1)`,
+  // string, not Date: a raw fragment has no column mapper, so the driver hands
+  // the timestamp through untouched as "2026-05-15 09:00:00+00". Typing it as a
+  // Date compiled fine and rendered "Invalid Date".
+  publishedAt: sql<string | null>`(select r.published_at from ${schema.documentRevisions} r where r.document_id = ${schema.documents.id} and r.status = 'PUBLISHED' limit 1)`,
   nextReviewOn: sql<string | null>`(select r.next_review_on from ${schema.documentRevisions} r where r.document_id = ${schema.documents.id} and r.status = 'PUBLISHED' limit 1)`,
 };
 

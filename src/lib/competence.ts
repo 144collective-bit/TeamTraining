@@ -39,15 +39,30 @@ export function daysUntil(date: string | null): number | null {
   return Math.floor((then - now) / 86400_000);
 }
 
+/**
+ * Postgres hands back two shapes and they parse differently: a `date` column
+ * arrives as "2027-05-15", which must be read as UTC or it shifts a day west of
+ * Greenwich, while a `timestamptz` arrives already carrying its offset —
+ * "2026-05-15 09:00:00+00" — and appending a time to that produces nonsense.
+ *
+ * Anything unparseable reads as "—". A record with a broken date should look
+ * like a record with no date, never like "Invalid Date" on a printed procedure.
+ */
 export function formatDate(date: string | Date | null): string {
   if (!date) return "—";
-  const d = typeof date === "string" ? new Date(`${date}T00:00:00Z`) : date;
+  const d =
+    typeof date === "string"
+      ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date}T00:00:00Z` : date)
+      : date;
+  if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export function formatDateTime(date: Date | null): string {
+export function formatDateTime(date: string | Date | null): string {
   if (!date) return "—";
-  return date.toLocaleString("en-GB", {
+  const d = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-GB", {
     day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
   });
 }

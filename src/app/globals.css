@@ -212,7 +212,9 @@ body { margin: 0; font-size: 14px; line-height: 1.5; }
   border-right: 1px solid var(--border-strong);
   min-width: 15rem;
 }
-.matrix thead .name-col { z-index: 4; }
+/* Above every machine header, which climb from 4 so their rotated labels can
+   paint across the columns to the right. */
+.matrix thead .name-col { z-index: 100; }
 
 .matrix tbody tr:hover .name-col { background: var(--surface-sunk); }
 .matrix tbody tr:hover td { background: color-mix(in srgb, var(--accent) 3%, transparent); }
@@ -256,7 +258,6 @@ body { margin: 0; font-size: 14px; line-height: 1.5; }
 /* Rotated machine headers keep the grid narrow enough to read */
 .col-head {
   height: 12rem; width: 3.5rem; padding: 0 0 0.5rem;
-  position: relative;
 }
 .col-head-inner {
   position: absolute; bottom: 0.5rem; left: 50%;
