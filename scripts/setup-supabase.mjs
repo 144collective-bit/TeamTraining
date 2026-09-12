@@ -120,11 +120,15 @@ const run = (label, args) => {
      * straight to the terminal now: slower steps show progress, and prompts can
      * be answered.
      */
-    execFileSync(NPM, ["run", "--silent", ...args], {
-      env,
-      stdio: "inherit",
-      shell: IS_WINDOWS,
-    });
+    const argv = ["run", "--silent", ...args];
+    if (IS_WINDOWS) {
+      // A .cmd shim needs a shell, and passing an args array alongside shell
+      // raises DEP0190 because Node concatenates rather than escapes them. The
+      // arguments here are fixed literals, so hand over one finished string.
+      execFileSync(`${NPM} ${argv.join(" ")}`, { env, stdio: "inherit", shell: true });
+    } else {
+      execFileSync(NPM, argv, { env, stdio: "inherit" });
+    }
   } catch {
     console.error(`\n${label}: failed. The error is immediately above.`);
     process.exit(1);
