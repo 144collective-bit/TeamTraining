@@ -44,6 +44,19 @@ if (!owner.password) {
   process.exit(1);
 }
 
+// The placeholder survives URL parsing as %5BYOUR-PASSWORD%5D, so it would
+// otherwise get as far as the database and come back as a puzzling auth error.
+if (/%5B|%5D|YOUR-PASSWORD|your-password/i.test(owner.password)) {
+  console.error(`The password is still the placeholder Supabase shows you:
+
+  ${decodeURIComponent(owner.password)}
+
+Replace it — square brackets and all — with your project's database password.
+That is the one you chose when you created the project. If you no longer have
+it: Supabase → Project Settings → Database → Reset database password.`);
+  process.exit(1);
+}
+
 const isPooler = /(^|\.)pooler\.supabase\.com$/i.test(owner.hostname);
 
 /**
