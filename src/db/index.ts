@@ -64,6 +64,54 @@ const globalForDb = globalThis as unknown as {
   __ttAdmin?: Db;
 };
 
+/**
+ * A value the driver cannot parse does not fail — it quietly falls back to
+ * localhost:5432 and reports ECONNREFUSED, which looks like a database that is
+ * down rather than a variable that is wrong. On a hosting platform there is no
+ * localhost to connect to, so the message points nowhere useful at all.
+ *
+ * The usual cause is pasting the whole `NAME=value` line into a panel's value
+ * box, or pasting it with quotes around it.
+ */
+function assertConnectionUrl(name: string, value: string): void {
+  const trimmed = value.trim();
+
+  if (trimmed.startsWith(`${name}=`)) {
+    throw new Error(
+      `${name} contains its own name: it starts with "${name}=".\n\n` +
+        "Set the value only — everything after the first = — beginning with\n" +
+        "postgresql:// and nothing before it.",
+    );
+  }
+
+  if (/^["']|["']$/.test(trimmed)) {
+    throw new Error(
+      `${name} is wrapped in quotes. Quotes belong around it in a shell, not in\n` +
+        "the stored value. Remove them.",
+    );
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error(
+      `${name} is not a connection URL. It should look like\n` +
+        "  postgresql://user:password@host:5432/database?sslmode=require",
+    );
+  }
+
+  if (!/^postgres(ql)?:$/.test(parsed.protocol)) {
+    throw new Error(
+      `${name} has the scheme "${parsed.protocol.replace(":", "")}". ` +
+        "It must be postgres:// or postgresql://.",
+    );
+  }
+  if (!parsed.hostname) {
+    throw new Error(`${name} has no host in it.`);
+  }
+}
+
 function makeDb(url: string, max: number) {
   const client = postgres(url, {
     max,
@@ -100,7 +148,8 @@ function appDb(): Db {
         "NOBYPASSRLS, so row-level security applies to it.",
     );
   }
-  const instance = makeDb(url, APP_POOL);
+  assertConnectionUrl("DATABASE_URL", url);
+  const instance = makeDb(url.trim(), APP_POOL);
   globalForDb.__ttApp = instance;
   return instance;
 }
@@ -126,7 +175,8 @@ export function getAdminDb(): Db {
         "owner rather than the application role.",
     );
   }
-  const instance = makeDb(url, 2);
+  assertConnectionUrl("DATABASE_ADMIN_URL", url);
+  const instance = makeDb(url.trim(), 2);
   globalForDb.__ttAdmin = instance;
   return instance;
 }
