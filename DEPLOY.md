@@ -392,6 +392,31 @@ the application role turned out to be the owner fails its first two lines:
 stored photograph, and proves each database guard refuses what it must — worth
 running once there is data.
 
+## Run the app in the database's region
+
+`vercel.json` pins the functions to `lhr1` (London), because the database this
+was first deployed against is in `eu-west-2`. **Change it to match yours.**
+
+It is not a small difference. Every read goes through `asTenant`, which opens a
+transaction to set the tenant for the statement — BEGIN, set_config, the query,
+COMMIT. That is four round trips, and a page makes several such calls. In
+region each round trip is about a millisecond. Across the Atlantic it is
+eighty, and the same page takes seconds.
+
+Vercel's default is `iad1` (Washington DC). A London database served from there
+measured 825ms for `SELECT 1`.
+
+| Database region | Put this in `vercel.json` |
+|---|---|
+| `eu-west-2` London | `lhr1` |
+| `eu-west-1` Ireland | `dub1` |
+| `eu-central-1` Frankfurt | `fra1` |
+| `us-east-1` Virginia | `iad1` |
+| `us-west-1` California | `sfo1` |
+
+`/api/health` reports the round trip it measured, so the effect is visible
+immediately after a deploy.
+
 ## Notes for serverless
 
 - Use the **pooled** connection string. Serverless instances each open their own
