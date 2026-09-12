@@ -111,24 +111,22 @@ const IS_WINDOWS = process.platform === "win32";
 const NPM = IS_WINDOWS ? "npm.cmd" : "npm";
 
 const run = (label, args) => {
-  process.stdout.write(`${label} … `);
+  console.log(`\n── ${label} ──`);
   try {
-    const out = execFileSync(NPM, ["run", "--silent", ...args], {
+    /**
+     * inherit, not pipe. Piping buried the database's own error underneath a
+     * "failed" line and, worse, left drizzle-kit's confirmation prompt with no
+     * stdin to read — so a push that wanted an answer simply hung. Output goes
+     * straight to the terminal now: slower steps show progress, and prompts can
+     * be answered.
+     */
+    execFileSync(NPM, ["run", "--silent", ...args], {
       env,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: "inherit",
       shell: IS_WINDOWS,
     });
-    console.log("ok");
-    // A NOTICE here is the database saying something happened that the person
-    // running this did not ask for — most importantly, that the role already
-    // existed and its password has just been changed.
-    for (const line of String(out).split("\n")) {
-      const at = line.indexOf("NOTICE:");
-      if (at !== -1) console.log(`  ${line.slice(at).trim()}`);
-    }
-  } catch (e) {
-    console.log("failed\n");
-    console.error(String(e.stdout ?? "") + String(e.stderr ?? e.message));
+  } catch {
+    console.error(`\n${label}: failed. The error is immediately above.`);
     process.exit(1);
   }
 };
