@@ -74,6 +74,23 @@ Paste the OWNER's string — the one Supabase gave you, usually "postgres".`);
   process.exit(1);
 }
 
+/**
+ * Hosted Postgres requires TLS, and the driver defaults to plaintext — so a
+ * string copied straight out of a provider's dashboard fails to connect at all
+ * unless sslmode says otherwise. Added only for remote hosts: a local Postgres
+ * usually has no certificate, and asking for TLS there fails just as hard.
+ */
+function withSsl(value) {
+  const url = new URL(value);
+  const isLocal =
+    ["localhost", "127.0.0.1", "::1", "[::1]", "db"].includes(url.hostname) ||
+    url.hostname.endsWith(".local");
+  if (!isLocal && !url.searchParams.has("sslmode")) {
+    url.searchParams.set("sslmode", "require");
+  }
+  return url.toString();
+}
+
 // URL-safe, so it survives being embedded in a connection string unencoded.
 const appPassword = randomBytes(24).toString("base64url");
 const sessionSecret = randomBytes(32).toString("base64");
@@ -82,8 +99,8 @@ const app = new URL(owner.toString());
 app.username = encodeURIComponent(appUser);
 app.password = encodeURIComponent(appPassword);
 
-const adminUrl = owner.toString();
-const appUrl = app.toString();
+const adminUrl = withSsl(owner.toString());
+const appUrl = withSsl(app.toString());
 const env = { ...process.env, DATABASE_ADMIN_URL: adminUrl, DATABASE_URL: appUrl };
 
 /**
