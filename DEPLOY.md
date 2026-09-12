@@ -9,12 +9,12 @@ There are two supported routes:
 
 | | **A — one VPS** | **B — managed Postgres** |
 |---|---|---|
-| Where | Hostinger, Hetzner, any Ubuntu box | Vercel + Neon/Supabase |
+| Where | A VPS — Hostinger, Hetzner, any Ubuntu box | Vercel or Hostinger app hosting, + Neon/Supabase |
 | Database | In the stack, on the same machine | The provider's |
 | TLS | Caddy, automatic | The platform's |
 | Backups | `scripts/backup.sh` — **yours to run** | The provider's, usually |
 | Prepared statements | On (direct connection) | Off (pooler) |
-| Read | [Route A](#route-a--one-vps) | [Route B](#route-b--managed-postgres), from step 1 |
+| Read | [Route A](#route-a--one-vps) | [Route B](#route-b--a-managed-app-host-plus-managed-postgres) |
 
 Route A is the one to take if the records must stay on hardware you control, or
 if you would rather pay for one box than for a platform and a database.
@@ -162,7 +162,37 @@ endpoint. A failed migration stops it before the new app starts.
 
 ---
 
-# Route B — managed Postgres
+# Route B — a managed app host, plus managed Postgres
+
+Vercel, Hostinger's app hosting, or anything else that builds from a GitHub push
+and runs `npm start`.
+
+### What a provisioning wizard will tell you to do, and should not
+
+Hosts that offer a one-click database integration hand you a snippet: add their
+client library to `package.json`, drop in a `db.js`, push. For Supabase that is
+`@supabase/supabase-js`.
+
+**Do not.** This app does not use any provider's client library. It connects to
+Postgres directly, over the standard protocol, as a role that cannot bypass the
+row-level security policies — that role split is the whole tenant isolation
+model, and `npm run test:isolation` is what proves it holds. A provider client
+library speaks to a REST API and carries its own, different, access model.
+Adding one connects nothing here, because nothing imports it; it only makes the
+wizard report success.
+
+What connects the database is the environment variables in step 3 and
+`npm run db:setup` in step 4. Nothing else.
+
+### Build and start
+
+Defaults work. `npm run build`, then `npm start`. The app needs a Node server —
+it is server-rendered on every request — so a static-export or PHP plan cannot
+run it.
+
+Do not put `db:setup` in the build command. It would run on every deploy, from
+whatever network the builder happens to be on, and a build that cannot reach the
+database would then fail for a reason that has nothing to do with the build.
 
 ## 1. Provision Postgres
 
@@ -252,7 +282,8 @@ one — `db:setup` creates roles and functions, which needs a session.
 | `DATABASE_APP_ROLE` | Optional. The application role's name, when the host does not let you put it in `DATABASE_URL` as-is |
 
 On Vercel, set these under Project → Settings → Environment Variables for
-Production (and Preview, if previews should work).
+Production (and Preview, if previews should work). On Hostinger's app hosting
+they are under the app's Environment / Variables panel.
 
 > Provider integrations often set `DATABASE_URL` to the **owner** automatically.
 > Overwrite it. `npm run db:sql` refuses to run if both URLs name the same role,
@@ -277,6 +308,24 @@ credential lives in your environment, never in the repository.
 Both are idempotent and safe to re-run after every schema change. `db:sql` also
 creates the `SECURITY DEFINER` functions that authentication depends on, so the
 app cannot sign anyone in until it has run.
+
+Neither needs `psql`, or any other tool beyond Node — so this runs from your own
+laptop against the hosted database, which is the usual way on a platform with no
+shell.
+
+### If you have no shell and no Node at all
+
+Render the SQL and paste it into the provider's SQL editor. Supabase, Neon and
+Vercel Postgres all have one:
+
+```bash
+npm run --silent db:sql:print > setup.sql
+```
+
+`--silent` matters: without it npm's own banner lands at the top of the file.
+The output contains the application role's password, so clear the editor's
+history afterwards. You still need `npm run db:push` from somewhere to create
+the tables first.
 
 ## 5. Create the organisation
 

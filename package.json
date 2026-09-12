@@ -18,6 +18,7 @@
     "check": "npm run typecheck && npm test && npm run verify && npm run test:isolation",
     "test:isolation": "tsx --tsconfig tsconfig.json scripts/tenant-isolation.ts",
     "db:sql": "node scripts/apply-sql.mjs",
+    "db:sql:print": "node scripts/apply-sql.mjs --print",
     "db:setup": "npm run db:push && npm run db:sql",
     "db:demo": "tsx --tsconfig tsconfig.json src/db/demo.ts",
     "e2e:first-run": "node e2e/first-run.mjs"

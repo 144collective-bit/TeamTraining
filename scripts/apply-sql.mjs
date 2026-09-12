@@ -5,13 +5,23 @@
  * Runs as the schema owner (DATABASE_ADMIN_URL), because creating roles and
  * policies requires privileges the application role deliberately lacks.
  *
+ * No psql: a managed app host does not have it, and that put the one command
+ * establishing tenant isolation out of reach on exactly the platforms most
+ * likely to need it. scripts/sql-runner.mjs does the substitution instead.
+ *
+ *   npm run db:sql                            apply both files
+ *   npm run --silent db:sql:print > setup.sql  render them instead, to paste
+ *                                              into a hosted SQL editor when
+ *                                              that is the only access you have
+ *
  * The application role's name and password come from DATABASE_URL. They are
  * not written into the SQL, so nothing has to keep a credential in the
  * repository, and pointing the app at a different role is a matter of changing
  * one environment variable.
  */
 import { readFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import postgres from "postgres";
+import { prepareScript } from "./sql-runner.mjs";
 
 /**
  * Supavisor — Supabase's connection pooler — identifies the project in the
@@ -97,30 +107,73 @@ try {
   process.exit(1);
 }
 
-for (const file of ["drizzle/guards.sql", "drizzle/rls.sql"]) {
-  readFileSync(file); // fail loudly if it is missing
-  process.stdout.write(`applying ${file} … `);
-  try {
-    const out = execFileSync(
-      "psql",
-      [
-        adminUrl,
-        "-v", "ON_ERROR_STOP=1",
-        "-v", `app_role=${appRole}`,
-        "-v", `app_password=${appPassword}`,
-        "-q", "-f", file,
-      ],
-      { stdio: ["ignore", "pipe", "pipe"] },
+const FILES = ["drizzle/guards.sql", "drizzle/rls.sql"];
+
+/**
+ * Render rather than run. The password is in the output, so it is written to
+ * stdout only — never to a file this script chooses — and the warning goes to
+ * stderr so a redirect still produces clean SQL.
+ */
+if (process.argv.includes("--print")) {
+  console.error(
+    `Rendered for role "${appRole}". The output CONTAINS ITS PASSWORD.\n` +
+      "Paste it into your provider's SQL editor, then clear the editor's history.",
+  );
+  // npm writes its own banner to stdout, which would sit at the top of the file
+  // as a syntax error waiting to happen.
+  if (process.env.npm_lifecycle_event && !process.stdout.isTTY) {
+    console.error(
+      "If you are redirecting this to a file, run it as:\n" +
+        "  npm run --silent db:sql:print > setup.sql",
     );
-    console.log("ok");
-    // Surface NOTICEs (the "could not set role attributes" case), not the noise.
-    const notices = String(out).split("\n").filter((l) => l.startsWith("NOTICE:"));
-    for (const n of notices) console.log(`  ${n}`);
-  } catch (e) {
-    console.log("failed");
-    console.error(String(e.stderr ?? e.message));
-    process.exit(1);
   }
+  for (const file of FILES) {
+    process.stdout.write(`\n-- ======== ${file} ========\n`);
+    process.stdout.write(
+      prepareScript(readFileSync(file, "utf8"), { app_role: appRole, app_password: appPassword }),
+    );
+  }
+  process.exit(0);
 }
+
+const client = postgres(adminUrl, {
+  max: 1,
+  // One connection for the whole run. rls.sql sets tt.app_role for the DO
+  // blocks that follow it, which only holds within a session.
+  prepare: false,
+  connect_timeout: 30,
+  idle_timeout: 20,
+  onnotice: (n) => {
+    // "policy ... does not exist, skipping" is every DROP POLICY IF EXISTS on a
+    // first run — the price of the files being re-runnable, and not news.
+    if (!n.message || /does not exist, skipping/.test(n.message)) return;
+    console.log(`  NOTICE: ${n.message}`);
+  },
+});
+
+try {
+  for (const file of FILES) {
+    const script = prepareScript(readFileSync(file, "utf8"), {
+      app_role: appRole,
+      app_password: appPassword,
+    });
+
+    process.stdout.write(`applying ${file} … `);
+    try {
+      await client.unsafe(script).simple();
+      console.log("ok");
+    } catch (e) {
+      console.log("failed");
+      console.error(`${e.message}${e.position ? ` (at character ${e.position})` : ""}`);
+      if (e.hint) console.error(`hint: ${e.hint}`);
+      process.exitCode = 1;
+      break;
+    }
+  }
+} finally {
+  await client.end({ timeout: 5 });
+}
+
+if (process.exitCode) process.exit(process.exitCode);
 
 console.log(`Integrity guards and row-level security applied. Application role: ${appRole}`);

@@ -27,19 +27,31 @@
 \quit 1
 \endif
 
--- Available to the DO blocks below, which cannot see psql variables because
--- substitution does not reach inside dollar-quoted strings.
+-- Available to the DO blocks below, which cannot see the substituted variables
+-- because substitution does not reach inside dollar-quoted strings.
 SET tt.app_role = :'app_role';
+SET tt.app_password = :'app_password';
 
 -- ---------------------------------------------------------------------------
 -- The application role
 -- ---------------------------------------------------------------------------
-SELECT format(
-  'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE',
-  :'app_role', :'app_password'
-)
-WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app_role')
-\gexec
+DO $create_role$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_roles WHERE rolname = current_setting('tt.app_role')
+  ) THEN
+    EXECUTE format(
+      'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE',
+      current_setting('tt.app_role'), current_setting('tt.app_password')
+    );
+  END IF;
+END
+$create_role$;
+
+-- Out of the session as soon as it has been used. It is still in the server log
+-- if log_statement is on, but there is no reason to leave it readable by
+-- anything else that runs on this connection.
+RESET tt.app_password;
 
 -- Belt and braces, in case the role predates this file or was created by hand
 -- with the wrong attributes. Some managed providers do not allow altering

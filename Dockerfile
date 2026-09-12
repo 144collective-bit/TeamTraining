@@ -3,9 +3,8 @@
 #
 #   runner    the application. Next's standalone output, so it carries only the
 #             dependencies actually reached at runtime.
-#   migrator  everything needed to change the database: dev dependencies for
-#             drizzle-kit and tsx, and psql for the triggers and RLS policies.
-#             Run once on deploy, then exits.
+#   migrator  everything needed to change the database: the dev dependencies
+#             drizzle-kit and tsx need. Run once on deploy, then exits.
 #
 # Splitting them keeps migration tooling — and the owner credentials it needs —
 # out of the image that serves requests.
@@ -26,6 +25,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # The build never touches the database: every page is server-rendered on demand
 # and the connections are created lazily.
+ENV BUILD_STANDALONE=true
 RUN npm run build
 
 # --- the application ---------------------------------------------------------
@@ -58,9 +58,6 @@ CMD ["node", "server.js"]
 # --- migrations --------------------------------------------------------------
 FROM node:${NODE_VERSION} AS migrator
 WORKDIR /app
-
-# psql applies drizzle/guards.sql and drizzle/rls.sql.
-RUN apk add --no-cache postgresql17-client
 
 ENV NODE_ENV=development
 COPY --from=deps /app/node_modules ./node_modules
