@@ -12,7 +12,7 @@
  */
 import { randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { writeFileSync, existsSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync } from "node:fs";
 
 const APP_ROLE = "tt_app";
 
@@ -142,25 +142,49 @@ run("creating the tables", ["db:push"]);
 run("applying guards and row-level security", ["db:sql"]);
 run("checking tenant isolation holds", ["test:isolation"]);
 
-// So migrations can be re-run later without regenerating the password.
-const envBody =
-  `DATABASE_ADMIN_URL=${adminUrl}\n` +
-  `DATABASE_URL=${appUrl}\n` +
-  `SESSION_SECRET=${sessionSecret}\n`;
+/**
+ * These three keys belong to this script: it has just created the role and set
+ * its password, so anything else in a .env for them is now wrong. Other lines
+ * are left exactly as they are.
+ *
+ * Refusing to touch an existing .env was worse than it sounds — a second run
+ * rotates the role's password in the database, and a .env left holding the old
+ * one authenticates against nothing.
+ */
+function upsertEnv(path, values) {
+  const existed = existsSync(path);
+  const lines = existed ? readFileSync(path, "utf8").split(/\r?\n/) : [];
+  const replaced = [];
+
+  for (const [key, value] of Object.entries(values)) {
+    const at = lines.findIndex((line) => new RegExp(`^\\s*${key}\\s*=`).test(line));
+    if (at === -1) {
+      lines.push(`${key}=${value}`);
+    } else {
+      if (lines[at].trim() !== `${key}=${value}`) replaced.push(key);
+      lines[at] = `${key}=${value}`;
+    }
+  }
+
+  while (lines.length && lines[lines.length - 1].trim() === "") lines.pop();
+  writeFileSync(path, `${lines.join("\n")}\n`, { mode: 0o600 });
+  return { existed, replaced };
+}
+
+const values = {
+  DATABASE_ADMIN_URL: adminUrl,
+  DATABASE_URL: appUrl,
+  SESSION_SECRET: sessionSecret,
+};
 
 writeFileSync(
   ".env.deploy",
-  `# Written by scripts/setup-supabase.mjs. Not committed. Keep it.\n${envBody}`,
+  `# Written by scripts/setup-supabase.mjs. Not committed. Keep it.\n` +
+    Object.entries(values).map(([k, v]) => `${k}=${v}`).join("\n") + "\n",
   { mode: 0o600 },
 );
 
-// The same three values are what `npm run dev` reads. Written only when there
-// is nothing to lose — an existing .env is someone's own setup.
-let wroteDotEnv = false;
-if (!existsSync(".env")) {
-  writeFileSync(".env", `# Written by scripts/setup-supabase.mjs.\n${envBody}`, { mode: 0o600 });
-  wroteDotEnv = true;
-}
+const dotEnv = upsertEnv(".env", values);
 
 console.log(`
 ────────────────────────────────────────────────────────────────────────
@@ -178,9 +202,11 @@ All three are saved in .env.deploy, which is gitignored. Keep it — without
 it you cannot run migrations again, and a new SESSION_SECRET signs everyone
 out.
 ${
-  wroteDotEnv
-    ? "\nThe same values were written to .env, so `npm run dev` works here too."
-    : "\n.env already existed and was left alone. To run locally against this\ndatabase, copy the values across yourself."
+  dotEnv.existed
+    ? `\n.env was updated in place${
+        dotEnv.replaced.length ? ` (${dotEnv.replaced.join(", ")})` : ""
+      } — the role's password has just\nbeen set, so the old values no longer authenticate. Anything else in that\nfile was left alone. Restart the dev server to pick them up.`
+    : "\nThe same values were written to .env, so `npm run dev` works here too."
 }
 Then open the app. An empty database sends you to a one-time setup page.
 `);
