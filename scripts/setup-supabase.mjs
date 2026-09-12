@@ -110,7 +110,12 @@ const env = { ...process.env, DATABASE_ADMIN_URL: adminUrl, DATABASE_URL: appUrl
 const IS_WINDOWS = process.platform === "win32";
 const NPM = IS_WINDOWS ? "npm.cmd" : "npm";
 
-const run = (label, args) => {
+/** Sync, because the steps around it are. */
+function pause(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+const run = (label, args, { retryAfterMs = 0 } = {}) => {
   console.log(`\n── ${label} ──`);
   try {
     /**
@@ -130,6 +135,28 @@ const run = (label, args) => {
       execFileSync(NPM, argv, { env, stdio: "inherit" });
     }
   } catch {
+    if (retryAfterMs) {
+      // Supabase's pooler caches credentials, so a password set moments ago can
+      // still be refused. It clears itself; worth one retry before reporting a
+      // failure that was never real.
+      console.error(
+        `\n${label}: failed. This often means the pooler has not caught up with ` +
+          `the new password yet — waiting ${Math.round(retryAfterMs / 1000)}s and trying once more.`,
+      );
+      pause(retryAfterMs);
+      try {
+        const argv2 = ["run", "--silent", ...args];
+        if (IS_WINDOWS) {
+          execFileSync(`${NPM} ${argv2.join(" ")}`, { env, stdio: "inherit", shell: true });
+        } else {
+          execFileSync(NPM, argv2, { env, stdio: "inherit" });
+        }
+        return;
+      } catch {
+        console.error(`\n${label}: failed again. The error is immediately above.`);
+        process.exit(1);
+      }
+    }
     console.error(`\n${label}: failed. The error is immediately above.`);
     process.exit(1);
   }
@@ -140,7 +167,7 @@ console.log(`Application: ${appUser}${projectRef ? `  (the role itself is "${APP
 
 run("creating the tables", ["db:push"]);
 run("applying guards and row-level security", ["db:sql"]);
-run("checking tenant isolation holds", ["test:isolation"]);
+run("checking tenant isolation holds", ["test:isolation"], { retryAfterMs: 30_000 });
 
 /**
  * These three keys belong to this script: it has just created the role and set
