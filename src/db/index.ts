@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { sql } from "drizzle-orm";
 import postgres from "postgres";
@@ -22,6 +23,26 @@ import * as schema from "./schema";
  */
 
 type Db = ReturnType<typeof makeDb>;
+
+/**
+ * Both variables live in .env, and the usual reason one is missing is that the
+ * file has not been created yet. Say so, rather than naming a variable and
+ * leaving someone to work out where it is meant to come from.
+ */
+function missingEnv(name: string, why: string): Error {
+  const hasEnvFile = existsSync(".env");
+  return new Error(
+    `${name} is not set. ${why}\n\n` +
+      (hasEnvFile
+        ? `There is a .env file, but it has no ${name} line. Add one, or re-run\n` +
+          `the setup below, which writes all three values.\n`
+        : "There is no .env file yet, which is where it belongs.\n") +
+      `\nTo create it, with the connection string from your database provider:\n` +
+      `  node scripts/setup-supabase.mjs "<connection string>"\n\n` +
+      `Supabase: Project Settings -> Database -> Connection string -> Session pooler.\n` +
+      `Replace [YOUR-PASSWORD] with your database password. Keep the quotes.\n`,
+  );
+}
 
 const globalForDb = globalThis as unknown as {
   __ttApp?: Db;
@@ -58,9 +79,10 @@ function appDb(): Db {
   if (globalForDb.__ttApp) return globalForDb.__ttApp;
   const url = process.env.DATABASE_URL;
   if (!url) {
-    throw new Error(
-      "DATABASE_URL is not set. It must point at the application role — a role with " +
-        "NOSUPERUSER and NOBYPASSRLS, so row-level security applies. See .env.example.",
+    throw missingEnv(
+      "DATABASE_URL",
+      "It must point at the application role — a role with NOSUPERUSER and " +
+        "NOBYPASSRLS, so row-level security applies to it.",
     );
   }
   const instance = makeDb(url, APP_POOL);
@@ -83,9 +105,10 @@ export function getAdminDb(): Db {
   if (globalForDb.__ttAdmin) return globalForDb.__ttAdmin;
   const url = process.env.DATABASE_ADMIN_URL;
   if (!url) {
-    throw new Error(
-      "DATABASE_ADMIN_URL is not set. It is required for migrations and seeding, " +
-        "and must point at the schema owner rather than the application role.",
+    throw missingEnv(
+      "DATABASE_ADMIN_URL",
+      "It is required for migrations and seeding, and must point at the schema " +
+        "owner rather than the application role.",
     );
   }
   const instance = makeDb(url, 2);
