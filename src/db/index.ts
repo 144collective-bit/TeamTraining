@@ -30,10 +30,25 @@ type Db = ReturnType<typeof makeDb>;
  * leaving someone to work out where it is meant to come from.
  */
 function missingEnv(name: string, why: string): Error {
-  const hasEnvFile = existsSync(".env");
+  // On a hosting platform there is no .env to write — the variable is set in
+  // the platform's own panel, and a message about files sends someone looking
+  // in the wrong place entirely.
+  const onAPlatform = Boolean(process.env.VERCEL || process.env.HOSTINGER || process.env.RENDER);
+
+  if (onAPlatform) {
+    return new Error(
+      `${name} is not set. ${why}\n\n` +
+        `Set it in this host's environment variables panel, then redeploy — a\n` +
+        `running build does not pick up new variables.\n\n` +
+        `The value is the DATABASE_URL line written by scripts/setup-supabase.mjs,\n` +
+        `saved locally in .env.deploy. Behind a transaction pooler (Supabase port\n` +
+        `6543), leave DATABASE_PREPARE unset.\n`,
+    );
+  }
+
   return new Error(
     `${name} is not set. ${why}\n\n` +
-      (hasEnvFile
+      (existsSync(".env")
         ? `There is a .env file, but it has no ${name} line. Add one, or re-run\n` +
           `the setup below, which writes all three values.\n`
         : "There is no .env file yet, which is where it belongs.\n") +
