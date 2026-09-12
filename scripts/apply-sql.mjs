@@ -13,6 +13,31 @@
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
+/**
+ * Supavisor — Supabase's connection pooler — identifies the project in the
+ * username rather than the hostname, so the role `tt_app` connects as
+ * `tt_app.abcdefghijklm`. That suffix is routing information, not part of the
+ * role: the role in the database is still `tt_app`, and creating one called
+ * `tt_app.abcdefghijklm` would leave the app unable to authenticate at all.
+ *
+ * Only stripped for pooler hosts, and only ever announced, never silent.
+ */
+function roleFromUsername(url, label) {
+  const parsed = new URL(url);
+  const username = decodeURIComponent(parsed.username);
+  if (!/(^|\.)pooler\.supabase\.com$/i.test(parsed.hostname)) return username;
+
+  const cut = username.lastIndexOf(".");
+  if (cut <= 0) return username;
+
+  const role = username.slice(0, cut);
+  console.log(
+    `${label}: connecting through the Supabase pooler as "${username}" — ` +
+      `the role itself is "${role}".`,
+  );
+  return role;
+}
+
 const adminUrl = process.env.DATABASE_ADMIN_URL;
 const appUrl = process.env.DATABASE_URL;
 
@@ -29,12 +54,17 @@ if (!appUrl) {
 
 let appRole, appPassword;
 try {
-  const parsed = new URL(appUrl);
-  appRole = decodeURIComponent(parsed.username);
-  appPassword = decodeURIComponent(parsed.password);
+  appRole = roleFromUsername(appUrl, "DATABASE_URL");
+  appPassword = decodeURIComponent(new URL(appUrl).password);
 } catch {
   console.error("DATABASE_URL could not be parsed as a connection URL.");
   process.exit(1);
+}
+
+// An explicit override, for any host that mangles the username in its own way.
+if (process.env.DATABASE_APP_ROLE) {
+  appRole = process.env.DATABASE_APP_ROLE;
+  console.log(`DATABASE_APP_ROLE is set: creating "${appRole}".`);
 }
 
 if (!appRole) {
@@ -49,10 +79,12 @@ if (!appPassword) {
   process.exit(1);
 }
 
-// Catching the mistake that quietly disables every policy in rls.sql.
+// Catching the mistake that quietly disables every policy in rls.sql. Compared
+// after stripping the pooler suffix, so `postgres.abc` and `tt_app.abc` are
+// correctly seen as two different roles — and `postgres.abc` and `postgres` as
+// the same one.
 try {
-  const admin = new URL(adminUrl);
-  if (decodeURIComponent(admin.username) === appRole) {
+  if (roleFromUsername(adminUrl, "DATABASE_ADMIN_URL") === appRole) {
     console.error(
       `DATABASE_URL and DATABASE_ADMIN_URL both authenticate as "${appRole}".\n` +
         "They must be different roles: the owner is not subject to row-level security,\n" +

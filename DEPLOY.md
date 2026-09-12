@@ -199,6 +199,48 @@ postgres://tt_app:<a strong password you choose>@ep-xyz-pooler.eu-west-2.aws.neo
 Keep `?sslmode=require` and everything after the `@`. Change only the username
 and password.
 
+### If the provider is Supabase
+
+Two things differ, and both will stop you if you do not know them.
+
+**The app talks to Postgres directly. It does not use `@supabase/supabase-js`.**
+Supabase's client library speaks to their REST API and relies on *their* RLS
+model, keyed on a JWT. This app has its own: policies keyed on
+`app_current_tenant()`, set per transaction, enforced against a role that cannot
+bypass them. Adding the client library and a `db.js` alongside it connects
+nothing — the app never imports either — while making a provisioning wizard
+report success. What connects the database is the two environment variables
+below and `npm run db:setup`. Nothing else.
+
+**The pooler puts the project reference in the username.** Supabase gives you
+three strings under *Connect*:
+
+| | Host | Port | Use it for |
+|---|---|---|---|
+| Direct | `db.<ref>.supabase.co` | 5432 | Migrations — but it is IPv6-only unless you have bought the IPv4 add-on |
+| Session pooler | `aws-0-<region>.pooler.supabase.com` | 5432 | Migrations, over IPv4 |
+| Transaction pooler | `aws-0-<region>.pooler.supabase.com` | 6543 | `DATABASE_URL` |
+
+Through either pooler the role `tt_app` connects as `tt_app.<ref>`:
+
+```
+# DATABASE_ADMIN_URL — session pooler, as the owner Supabase gave you
+postgres://postgres.abcdefghijklm:<their password>@aws-0-eu-west-2.pooler.supabase.com:5432/postgres
+
+# DATABASE_URL — transaction pooler, as the role you are about to create
+postgres://tt_app.abcdefghijklm:<a strong password you choose>@aws-0-eu-west-2.pooler.supabase.com:6543/postgres
+```
+
+`db:sql` knows that `.abcdefghijklm` is routing information rather than part of
+the role name, and creates `tt_app`. It says so when it does. If some other host
+mangles the username differently, set `DATABASE_APP_ROLE` to the role name you
+want and it will use that instead.
+
+Leave `DATABASE_PREPARE` unset: port 6543 is a transaction pooler.
+
+Use the **session** pooler (5432) for `DATABASE_ADMIN_URL`, not the transaction
+one — `db:setup` creates roles and functions, which needs a session.
+
 ## 3. Set the environment variables
 
 | Variable | Value |
@@ -207,6 +249,7 @@ and password.
 | `DATABASE_ADMIN_URL` | The **direct** string, as the owner |
 | `SESSION_SECRET` | 32+ random characters — `openssl rand -base64 32` |
 | `DATABASE_POOL_MAX` | Optional. Defaults to 1 on Vercel, 5 elsewhere |
+| `DATABASE_APP_ROLE` | Optional. The application role's name, when the host does not let you put it in `DATABASE_URL` as-is |
 
 On Vercel, set these under Project → Settings → Environment Variables for
 Production (and Preview, if previews should work).
