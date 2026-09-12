@@ -12,7 +12,7 @@
  */
 import { randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { writeFileSync, existsSync } from "node:fs";
 
 const APP_ROLE = "tt_app";
 
@@ -73,12 +73,20 @@ const adminUrl = owner.toString();
 const appUrl = app.toString();
 const env = { ...process.env, DATABASE_ADMIN_URL: adminUrl, DATABASE_URL: appUrl };
 
+/**
+ * On Windows npm is a .cmd shim, which has to be named and run through a shell.
+ * The arguments here are fixed literals, so there is nothing to quote badly.
+ */
+const IS_WINDOWS = process.platform === "win32";
+const NPM = IS_WINDOWS ? "npm.cmd" : "npm";
+
 const run = (label, args) => {
   process.stdout.write(`${label} … `);
   try {
-    const out = execFileSync("npm", ["run", "--silent", ...args], {
+    const out = execFileSync(NPM, ["run", "--silent", ...args], {
       env,
       stdio: ["ignore", "pipe", "pipe"],
+      shell: IS_WINDOWS,
     });
     console.log("ok");
     // A NOTICE here is the database saying something happened that the person
@@ -103,14 +111,24 @@ run("applying guards and row-level security", ["db:sql"]);
 run("checking tenant isolation holds", ["test:isolation"]);
 
 // So migrations can be re-run later without regenerating the password.
+const envBody =
+  `DATABASE_ADMIN_URL=${adminUrl}\n` +
+  `DATABASE_URL=${appUrl}\n` +
+  `SESSION_SECRET=${sessionSecret}\n`;
+
 writeFileSync(
   ".env.deploy",
-  `# Written by scripts/setup-supabase.mjs. Not committed. Keep it.\n` +
-    `DATABASE_ADMIN_URL=${adminUrl}\n` +
-    `DATABASE_URL=${appUrl}\n` +
-    `SESSION_SECRET=${sessionSecret}\n`,
+  `# Written by scripts/setup-supabase.mjs. Not committed. Keep it.\n${envBody}`,
   { mode: 0o600 },
 );
+
+// The same three values are what `npm run dev` reads. Written only when there
+// is nothing to lose — an existing .env is someone's own setup.
+let wroteDotEnv = false;
+if (!existsSync(".env")) {
+  writeFileSync(".env", `# Written by scripts/setup-supabase.mjs.\n${envBody}`, { mode: 0o600 });
+  wroteDotEnv = true;
+}
 
 console.log(`
 ────────────────────────────────────────────────────────────────────────
@@ -127,6 +145,10 @@ security and nothing serving a request needs it.
 All three are saved in .env.deploy, which is gitignored. Keep it — without
 it you cannot run migrations again, and a new SESSION_SECRET signs everyone
 out.
-
+${
+  wroteDotEnv
+    ? "\nThe same values were written to .env, so `npm run dev` works here too."
+    : "\n.env already existed and was left alone. To run locally against this\ndatabase, copy the values across yourself."
+}
 Then open the app. An empty database sends you to a one-time setup page.
 `);

@@ -169,8 +169,11 @@ roles, and `npm run db:sql` applied, before it can sign anyone in.
 Quickest, with Supabase and any host that runs `npm start`:
 
 ```bash
-npm run setup:supabase -- "<your Supabase session-pooler string>"
+node scripts/setup-supabase.mjs "<your Supabase session-pooler string>"
 ```
+
+(`npm run setup:supabase -- "…"` does the same, but PowerShell mangles the
+`--`, so call the script directly on Windows.)
 
 It sets the database up and prints the two environment variables to paste into
 the host. Then deploy.
