@@ -73,6 +73,16 @@ const globalForDb = globalThis as unknown as {
  * The usual cause is pasting the whole `NAME=value` line into a panel's value
  * box, or pasting it with quotes around it.
  */
+/**
+ * Enough of the value to identify what went in, without disclosing it. A
+ * connection string's first twelve characters are "postgresql:/"; anything
+ * else here is not a connection string, so there is nothing to protect.
+ */
+function shapeOf(value: string): string {
+  const head = value.slice(0, 12).replace(/[\r\n\t]/g, "·");
+  return `got ${JSON.stringify(head)}… , length ${value.length}`;
+}
+
 function assertConnectionUrl(name: string, value: string): void {
   const trimmed = value.trim();
 
@@ -97,14 +107,15 @@ function assertConnectionUrl(name: string, value: string): void {
   } catch {
     throw new Error(
       `${name} is not a connection URL. It should look like\n` +
-        "  postgresql://user:password@host:5432/database?sslmode=require",
+        "  postgresql://user:password@host:5432/database?sslmode=require\n\n" +
+        `${shapeOf(trimmed)}`,
     );
   }
 
   if (!/^postgres(ql)?:$/.test(parsed.protocol)) {
     throw new Error(
       `${name} has the scheme "${parsed.protocol.replace(":", "")}". ` +
-        "It must be postgres:// or postgresql://.",
+        `It must be postgres:// or postgresql://.\n\n${shapeOf(trimmed)}`,
     );
   }
   if (!parsed.hostname) {
