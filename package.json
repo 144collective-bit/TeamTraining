@@ -27,6 +27,7 @@
     "db:setup": "npm run db:push && npm run db:sql",
     "setup:supabase": "node scripts/setup-supabase.mjs",
     "deploy:vercel": "node scripts/deploy-vercel.mjs",
+    "go": "node scripts/go.mjs",
     "db:demo": "tsx --tsconfig tsconfig.json src/db/demo.ts",
     "e2e:first-run": "node e2e/first-run.mjs"
   },
