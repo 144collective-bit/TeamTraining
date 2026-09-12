@@ -35,11 +35,24 @@ SET tt.app_password = :'app_password';
 -- ---------------------------------------------------------------------------
 -- The application role
 -- ---------------------------------------------------------------------------
+-- The password is set on every run, not only at creation. DATABASE_URL is the
+-- single source of truth for this credential, so the database is made to match
+-- it. Roles are cluster-wide and outlive any one database: without this, a
+-- second install against the same cluster would find the role already there,
+-- skip it, and leave the app holding a password that authenticates nothing.
 DO $create_role$
 BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
     SELECT 1 FROM pg_roles WHERE rolname = current_setting('tt.app_role')
   ) THEN
+    EXECUTE format(
+      'ALTER ROLE %I LOGIN PASSWORD %L',
+      current_setting('tt.app_role'), current_setting('tt.app_password')
+    );
+    RAISE NOTICE
+      'Role % already existed; its password is now the one in DATABASE_URL. Anything else using that role on this cluster will need updating.',
+      current_setting('tt.app_role');
+  ELSE
     EXECUTE format(
       'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE',
       current_setting('tt.app_role'), current_setting('tt.app_password')

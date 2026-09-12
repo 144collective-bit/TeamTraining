@@ -166,7 +166,17 @@ docs/               Research and planning (see docs/README below)
 See [DEPLOY.md](DEPLOY.md). The short version: the app needs Postgres with two
 roles, and `npm run db:sql` applied, before it can sign anyone in.
 
-Two routes are supported. **One VPS** (Hostinger, Hetzner, any Ubuntu box):
+Quickest, with Supabase and any host that runs `npm start`:
+
+```bash
+npm run setup:supabase -- "<your Supabase session-pooler string>"
+```
+
+It sets the database up and prints the two environment variables to paste into
+the host. Then deploy.
+
+Two routes are supported in full. **One VPS** (Hostinger, Hetzner, any Ubuntu
+box):
 
 ```bash
 git clone https://github.com/144collective-bit/TeamTraining.git /opt/teamtraining

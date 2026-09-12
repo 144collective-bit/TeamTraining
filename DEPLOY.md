@@ -5,6 +5,37 @@ two roles and the SQL in `drizzle/` applied. That setup is not optional: the
 security model depends on the application connecting as a role that cannot
 bypass row-level security.
 
+## The fastest route
+
+Supabase for the database, any host that builds from GitHub and runs
+`npm start` for the app. About ten minutes.
+
+1. Create a Supabase project. **Connect → Session pooler**, copy the string,
+   replace `[YOUR-PASSWORD]` with the database password.
+
+2. On your own machine, in a clone of this repository:
+
+   ```bash
+   npm install
+   npm run setup:supabase -- "<that string>"
+   ```
+
+   It invents the application role and its password, creates the tables,
+   applies the integrity guards and row-level security policies, checks the
+   isolation actually took effect, and prints two variables.
+
+3. Paste those two — `DATABASE_URL` and `SESSION_SECRET` — into the host's
+   environment panel. Nothing else is required. `DATABASE_ADMIN_URL` stays on
+   your machine: it bypasses row-level security and nothing serving a request
+   needs it.
+
+4. Deploy. Open the app — an empty database sends you to a one-time setup page
+   that creates your organisation and your administrator account.
+
+The rest of this file is the long version, and the VPS alternative.
+
+---
+
 There are two supported routes:
 
 | | **A — one VPS** | **B — managed Postgres** |

@@ -6,6 +6,8 @@ build/
 .env.local
 # Production secrets live on the server only.
 .env.production
+# Written by scripts/setup-supabase.mjs. Holds live credentials.
+.env.deploy
 # Database dumps. Never in git.
 backups/
 *.tsbuildinfo

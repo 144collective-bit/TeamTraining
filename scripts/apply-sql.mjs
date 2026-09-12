@@ -19,6 +19,7 @@
  * repository, and pointing the app at a different role is a matter of changing
  * one environment variable.
  */
+import "dotenv/config";
 import { readFileSync } from "node:fs";
 import postgres from "postgres";
 import { prepareScript } from "./sql-runner.mjs";
