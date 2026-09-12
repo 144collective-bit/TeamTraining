@@ -14,9 +14,29 @@ import { randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { writeFileSync, readFileSync, existsSync } from "node:fs";
 
-const APP_ROLE = "tt_app";
+/**
+ * Supabase's pooler caches each username's credential and does not notice an
+ * ALTER ROLE ... PASSWORD. A role whose password has been rotated can therefore
+ * be refused indefinitely while the database itself is perfectly happy.
+ *
+ * A name the pooler has never seen has nothing cached, so --role is the way out
+ * of that: make a new one rather than fighting the cache.
+ *
+ *   node scripts/setup-supabase.mjs "<url>" --role tt_live
+ */
+const argv = process.argv.slice(2);
+const roleAt = argv.indexOf("--role");
+const APP_ROLE = roleAt === -1 ? "tt_app" : argv[roleAt + 1];
 
-const raw = process.argv[2];
+if (roleAt !== -1 && !/^[a-z_][a-z0-9_]{0,62}$/.test(APP_ROLE ?? "")) {
+  console.error(
+    "--role needs a plain lowercase name: letters, digits and underscores,\n" +
+      "starting with a letter or underscore. For example: --role tt_live",
+  );
+  process.exit(1);
+}
+
+const raw = argv.filter((_, i) => i !== roleAt && i !== roleAt + 1)[0];
 if (!raw) {
   console.error(`Usage: npm run setup:supabase -- "<connection string>"
 
@@ -153,7 +173,13 @@ const run = (label, args, { retryAfterMs = 0 } = {}) => {
         }
         return;
       } catch {
-        console.error(`\n${label}: failed again. The error is immediately above.`);
+        console.error(
+          `\n${label}: failed again. The error is immediately above.\n\n` +
+            `If that says "password authentication failed for user \"${APP_ROLE}\"",\n` +
+            `Supabase's pooler is still serving a cached password for that name and\n` +
+            `will not pick up the new one. Use a name it has never seen:\n\n` +
+            `  node scripts/setup-supabase.mjs "<the same url>" --role ${APP_ROLE}_2\n`,
+        );
         process.exit(1);
       }
     }
