@@ -687,6 +687,73 @@ async function main() {
   }).returning();
 
   /* ---------------------------------------------------------------- *
+   * Completed inductions for everyone already established on site
+   *
+   * Dated from each person's own start date rather than all on one day —
+   * a fixture where fourteen people were inducted the same morning reads
+   * as seeded data the moment anyone opens a record.
+   * ---------------------------------------------------------------- */
+  // Longest-serving first, so "who was already here" is a prefix of this list.
+  const bySeniority = [...staff].sort((a, b) => a.startedOn.localeCompare(b.startedOn));
+
+  for (const [i, person] of staff.entries()) {
+    if (person.name === "Aisha Khan") continue; // hers is still in progress
+
+    const user = byName(person.name);
+
+    /*
+     * Whoever ran the induction has to have been on site to run it. Picking
+     * from a fixed trio produced Gareth inducting Ian a year before Gareth
+     * joined — the sort of detail that gives a fixture away the moment someone
+     * opens a record.
+     */
+    const supervisors = bySeniority.filter(
+      (s) => s.name !== person.name && s.role !== "OPERATOR",
+    );
+    const alreadyHere = supervisors.filter((s) => s.startedOn < person.startedOn);
+
+    // The longest-serving supervisor has nobody senior before them. Theirs is
+    // dated to when the next one arrived and could run it, not to their own
+    // first day — a site's first induction cannot predate its second person.
+    const inductor = alreadyHere.length > 0 ? alreadyHere[i % alreadyHere.length] : supervisors[0];
+    const startedAt = new Date(
+      `${alreadyHere.length > 0 ? person.startedOn : inductor.startedOn}T08:00:00Z`,
+    );
+
+    const trainer = byName(inductor.name);
+    const completedAt = new Date(startedAt.getTime() + (i % 2 === 0 ? 6 : 27) * 60 * 60 * 1000);
+
+    const [record] = await db.insert(schema.inductions).values({
+      tenantId, userId: user.id, trainerId: trainer.id,
+      checklistRevisionId: checklistRev.id,
+      startedAt, completedAt,
+    }).returning();
+
+    await db.insert(schema.inductionItems).values(
+      checklistBody.items.map((item, n) => ({
+        tenantId, inductionId: record.id, label: item.label,
+        documentRevisionId: item.reference === "RA-SITE-001" ? siteRaRev.id : null,
+        sortOrder: n + 1,
+        completedAt: new Date(startedAt.getTime() + (n + 1) * 30 * 60 * 1000),
+        completedBy: trainer.id,
+      })),
+    );
+
+    await emit({
+      tenantId, streamId: record.id, streamType: "induction",
+      eventType: "InductionStarted",
+      payload: { userId: user.id, trainerId: trainer.id },
+      actorId: trainer.id, occurredAt: startedAt,
+    });
+    await emit({
+      tenantId, streamId: record.id, streamType: "induction",
+      eventType: "InductionCompleted",
+      payload: {},
+      actorId: trainer.id, occurredAt: completedAt,
+    });
+  }
+
+  /* ---------------------------------------------------------------- *
    * Induction in progress, instantiated from that checklist
    * ---------------------------------------------------------------- */
   const aisha = byName("Aisha Khan");
@@ -718,6 +785,27 @@ async function main() {
     payload: { userId: aisha.id, trainerId: ian.id },
     actorId: ian.id, occurredAt: new Date(`${iso(2)}T08:00:00Z`),
   });
+
+  /*
+   * A fixture is only useful while it is believable. This caught Gareth
+   * inducting Ian a year before Gareth joined, and Ian inducting himself.
+   */
+  const [implausible] = await db.execute(sql`
+    select count(*)::int as n
+      from inductions i
+      join users u on u.id = i.user_id
+      join users t on t.id = i.trainer_id
+     where t.id = u.id
+        or t.role = 'OPERATOR'
+        or t.started_on > i.started_at::date
+  `) as unknown as Array<{ n: number }>;
+
+  if (implausible.n > 0) {
+    throw new Error(
+      `${implausible.n} induction(s) could not have happened: run by the person ` +
+        "themselves, by an operator, or by someone who had not started yet.",
+    );
+  }
 
   console.log(`
 Seed complete.
