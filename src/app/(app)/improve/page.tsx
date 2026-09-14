@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { getCoverage, getDocumentsDueReview, getActionList } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
+import { SectionMark } from "@/components/section-mark";
 import { formatDate, DOC_KIND_META } from "@/lib/competence";
 import { routes } from "@/lib/routes";
 
@@ -47,9 +48,22 @@ export default async function ImprovePage() {
             within its review date, and every change has been read.
           </div>
         ) : (
-          <p className="text-[13.5px] text-[var(--ink-soft)]">
-            {total} {total === 1 ? "item" : "items"} across coverage, procedures and acknowledgements.
-          </p>
+          <section className="card card-pad flex flex-wrap items-center gap-5">
+            <SectionMark section="improve" size={52} />
+            <div>
+              <p className="flex items-baseline gap-2">
+                <span className="text-[38px] font-semibold leading-none" style={{ color: "var(--sec-improve)" }}>
+                  {total}
+                </span>
+                <span className="text-[13.5px] text-[var(--ink-soft)]">
+                  {total === 1 ? "thing to put right" : "things to put right"}
+                </span>
+              </p>
+              <p className="mt-1.5 text-[12.5px] text-[var(--ink-faint)]">
+                Across coverage, procedures and acknowledgements. Most costly first.
+              </p>
+            </div>
+          </section>
         )}
 
         <Group

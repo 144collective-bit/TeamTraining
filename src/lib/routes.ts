@@ -11,6 +11,7 @@ import type { Route } from "next";
 export const routes = {
   home: "/home" as Route,
   induction: "/induction" as Route,
+  training: "/training" as Route,
   improve: "/improve" as Route,
   dashboard: "/dashboard" as Route,
   matrix: "/matrix" as Route,

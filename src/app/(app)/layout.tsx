@@ -49,7 +49,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <nav className="flex lg:flex-col gap-0.5 p-2 lg:p-2.5 lg:flex-1 lg:overflow-y-auto">
           <NavLink href="/home" icon="grid">Home</NavLink>
           <NavLink href="/induction" icon="person">Induction</NavLink>
-          <NavLink href="/matrix" icon="matrix">Training</NavLink>
+          <NavLink href="/training" icon="matrix">Training</NavLink>
           <NavLink href="/improve" icon="improve">Improve</NavLink>
 
           <span

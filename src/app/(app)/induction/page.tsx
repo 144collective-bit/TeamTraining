@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { getInductionOverview } from "@/lib/queries";
 import { PageHeader } from "@/components/page-header";
+import { SectionMark } from "@/components/section-mark";
 import { formatDate } from "@/lib/competence";
 import { routes } from "@/lib/routes";
 
@@ -32,11 +33,22 @@ export default async function InductionPage() {
       />
 
       <div className="p-5 sm:p-7 space-y-5">
-        <p className="text-[13.5px] text-[var(--ink-soft)]">
-          {outstanding === 0
-            ? `All ${people.length} people on site have completed their induction.`
-            : `${outstanding} of ${people.length} still to complete.`}
-        </p>
+        <section className="card card-pad flex flex-wrap items-center gap-5">
+          <SectionMark section="induction" size={52} />
+          <div>
+            <p className="flex items-baseline gap-2">
+              <span className="text-[38px] font-semibold leading-none" style={{ color: "var(--sec-induction)" }}>
+                {people.length - outstanding}
+              </span>
+              <span className="text-[13.5px] text-[var(--ink-soft)]">of {people.length} inducted</span>
+            </p>
+            <p className="mt-1.5 text-[12.5px] text-[var(--ink-faint)]">
+              {outstanding === 0
+                ? "Everyone on site has completed their induction."
+                : `${outstanding} still to complete.`}
+            </p>
+          </div>
+        </section>
 
         <div className="card overflow-hidden">
           <ul className="divide-y" style={{ borderColor: "var(--border)" }}>

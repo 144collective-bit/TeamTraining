@@ -63,6 +63,16 @@
   --rail-active:   #33383e;
   --accent:        #c8102e;
 
+  /*
+   * The three sections' own colours. Categorical — identity, not status — so
+   * they are kept clear of the status palette and assigned in a fixed order.
+   * Checked with the palette validator against this surface: lightness band,
+   * chroma floor, CVD separation and contrast all pass.
+   */
+  --sec-induction: #0d9488;
+  --sec-training:  #4338ca;
+  --sec-improve:   #b45309;
+
   /* Matrix status palette - light */
   --st-competent-bg:   #dcf5e6;  --st-competent-fg:   #10653a;  --st-competent-br: #a4dfbd;
   --st-trainer-bg:     #c9eddc;  --st-trainer-fg:     #0a5230;  --st-trainer-br:   #7fcda6;
@@ -90,6 +100,12 @@
     --rail-hover:    #1c2025;
     --rail-active:   #262a30;
     --accent:        #f23449;
+
+    /* Re-stepped for the dark surface, not flipped. Same three hues, chosen
+       inside the darker lightness band and re-validated. */
+    --sec-induction: #0d9488;
+    --sec-training:  #6366f1;
+    --sec-improve:   #d97706;
 
     --st-competent-bg:   #123a26;  --st-competent-fg:   #7ce0aa;  --st-competent-br: #1d5c3c;
     --st-trainer-bg:     #0f4a2d;  --st-trainer-fg:     #9ef0c4;  --st-trainer-br:   #226f46;
