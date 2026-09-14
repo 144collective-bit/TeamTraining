@@ -9,6 +9,9 @@ import type { Route } from "next";
  * renaming a route is a single grep.
  */
 export const routes = {
+  home: "/home" as Route,
+  induction: "/induction" as Route,
+  improve: "/improve" as Route,
   dashboard: "/dashboard" as Route,
   matrix: "/matrix" as Route,
   signOffs: "/signoff" as Route,

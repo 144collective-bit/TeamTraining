@@ -51,7 +51,7 @@ await step('create the organisation and first admin', async () => {
 
 await step('setup closes once an organisation exists', async () => {
   await p.goto(`${BASE}/setup`, { waitUntil: 'domcontentloaded' });
-  await p.waitForURL(/\/dashboard/, { timeout: 15000 });
+  await p.waitForURL(/\/home/, { timeout: 15000 });
 });
 
 await step('add an area and a machine', async () => {

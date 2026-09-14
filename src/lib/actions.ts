@@ -3,6 +3,7 @@
 import { verifySecret } from "./crypto";
 import { createSession, destroySession, lookupLogin } from "./session";
 import { redirect } from "next/navigation";
+import { routes } from "@/lib/routes";
 
 export type LoginState = { error?: string };
 
@@ -20,7 +21,7 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   }
 
   await createSession(user.id);
-  redirect("/dashboard");
+  redirect(routes.home);
 }
 
 export async function logout() {

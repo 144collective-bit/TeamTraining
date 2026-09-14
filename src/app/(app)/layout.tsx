@@ -41,29 +41,28 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </span>
         </div>
 
+        {/*
+          Three destinations, then the detail behind them. The old rail had
+          three section headings over seven links — structure for its own sake,
+          and the headings were the first thing a new person had to decode.
+        */}
         <nav className="flex lg:flex-col gap-0.5 p-2 lg:p-2.5 lg:flex-1 lg:overflow-y-auto">
-          <p className="hidden lg:block label px-2.5 pt-2 pb-1.5" style={{ color: "var(--rail-ink-soft)" }}>
-            Shop floor
-          </p>
-          <NavLink href="/dashboard" icon="grid">Dashboard</NavLink>
-          <NavLink href="/matrix" icon="matrix">Training matrix</NavLink>
-          <NavLink href="/signoff" icon="check">Today's sign-offs</NavLink>
+          <NavLink href="/home" icon="grid">Home</NavLink>
+          <NavLink href="/induction" icon="person">Induction</NavLink>
+          <NavLink href="/matrix" icon="matrix">Training</NavLink>
+          <NavLink href="/improve" icon="improve">Improve</NavLink>
 
-          <p className="hidden lg:block label px-2.5 pt-4 pb-1.5" style={{ color: "var(--rail-ink-soft)" }}>
-            Records
-          </p>
+          <span
+            className="hidden lg:block my-2.5 border-t"
+            style={{ borderColor: "#ffffff14" }}
+            aria-hidden
+          />
+
+          <NavLink href="/signoff" icon="check">Today's sign-offs</NavLink>
           <NavLink href="/people" icon="people">People</NavLink>
           <NavLink href="/machines" icon="machine">Machines</NavLink>
           <NavLink href="/documents" icon="doc">Documents</NavLink>
-
-          {canAdminister && (
-            <>
-              <p className="hidden lg:block label px-2.5 pt-4 pb-1.5" style={{ color: "var(--rail-ink-soft)" }}>
-                Manage
-              </p>
-              <NavLink href="/admin" icon="settings">Admin</NavLink>
-            </>
-          )}
+          {canAdminister && <NavLink href="/admin" icon="settings">Admin</NavLink>}
         </nav>
 
         <div className="hidden lg:block p-2.5 border-t" style={{ borderColor: "#ffffff14" }}>

@@ -34,18 +34,35 @@ export default async function DashboardPage() {
       />
 
       <div className="p-5 sm:p-7 space-y-6">
-        <section aria-label="Summary">
-          <div className="grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            <Stat label="People" value={stats.people} hint="Active on site" href="/people" />
-            <Stat label="Machines" value={stats.machines} hint="In service" href="/machines" />
-            <Stat label="Competent" value={stats.competent} tone="good" hint="Signed-off competences" href="/matrix" />
-            <Stat label="In training" value={stats.inTraining + stats.inInduction} tone="neutral" hint="Including induction" href="/matrix" />
+        {/*
+          Four tiles, not nine. Nine equal-weight numbers is nine things with
+          equal claim on your attention, which is the same as none.
+
+          These four are the ones that mean do something today. The two that
+          are only occasionally actionable appear when they are, and stay out
+          of the way when they are not. Headcount and machine count are
+          context, not signals, so they sit in one quiet line underneath.
+        */}
+        <section aria-label="What needs attention">
+          <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
             <Stat label="Needs action" value={stats.revalidate + stats.suspended} tone={stats.revalidate + stats.suspended > 0 ? "warn" : "neutral"} hint="Expired or suspended" href="/matrix" />
             <Stat label="Single points" value={singlePoints.length} tone={singlePoints.length > 0 ? "bad" : "good"} hint="≤1 competent operator" href="/machines" />
             <Stat label="Expiring soon" value={stats.expiringSoon} tone={stats.expiringSoon > 0 ? "warn" : "neutral"} hint="Within 60 days" href="/matrix" />
-            <Stat label="Reviews due" value={stats.reviewsDue} tone={stats.reviewsDue > 0 ? "warn" : "neutral"} hint="Quarterly reviews overdue" href="/matrix" />
-            <Stat label="To acknowledge" value={stats.pendingAck} tone={stats.pendingAck > 0 ? "warn" : "neutral"} hint="Minor SOP changes unread" href="/matrix" />
+            <Stat label="In training" value={stats.inTraining + stats.inInduction} tone="neutral" hint="Including induction" href="/matrix" />
+            {stats.reviewsDue > 0 && (
+              <Stat label="Reviews due" value={stats.reviewsDue} tone="warn" hint="Quarterly reviews overdue" href="/matrix" />
+            )}
+            {stats.pendingAck > 0 && (
+              <Stat label="To acknowledge" value={stats.pendingAck} tone="warn" hint="Minor SOP changes unread" href="/matrix" />
+            )}
           </div>
+          <p className="mt-3 text-[12.5px] text-[var(--ink-faint)]">
+            <Link href="/people" className="hover:underline">{stats.people} people</Link>
+            {" · "}
+            <Link href="/machines" className="hover:underline">{stats.machines} machines</Link>
+            {" · "}
+            <Link href="/matrix" className="hover:underline">{stats.competent} signed-off competences</Link>
+          </p>
         </section>
 
         <div className="grid gap-6 lg:grid-cols-2">
@@ -138,17 +155,16 @@ export default async function DashboardPage() {
             </p>
           </div>
           <div className="overflow-x-auto">
-            {/* min-width, so narrow screens scroll the table instead of
-                crushing seven columns into 390px. */}
-            <table className="w-full min-w-[36rem] text-[13px]">
+            {/* In training and Needs action used to be columns here. They are
+                the matrix's job, and repeating them cost two columns on a table
+                that is about one question: can this machine be run tomorrow. */}
+            <table className="w-full min-w-[28rem] text-[13px]">
               <thead>
                 <tr className="border-b" style={{ borderColor: "var(--border)" }}>
                   <Th className="text-left pl-5">Machine</Th>
                   <Th className="text-left">Area</Th>
                   <Th>Competent</Th>
                   <Th>Trainers</Th>
-                  <Th>In training</Th>
-                  <Th>Needs action</Th>
                   <Th className="pr-5">Risk</Th>
                 </tr>
               </thead>
@@ -164,8 +180,6 @@ export default async function DashboardPage() {
                     <td className="py-2.5 text-[var(--ink-soft)]">{c.areaName}</td>
                     <Td tone={c.competent === 0 ? "bad" : c.competent === 1 ? "warn" : undefined}>{c.competent}</Td>
                     <Td tone={c.trainers === 0 ? "warn" : undefined}>{c.trainers}</Td>
-                    <Td>{c.inTraining}</Td>
-                    <Td tone={c.needsAction > 0 ? "warn" : undefined}>{c.needsAction}</Td>
                     <td className="py-2.5 pr-5 text-center">
                       {c.competent === 0 ? (
                         <Badge tone="bad">No cover</Badge>

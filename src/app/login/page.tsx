@@ -8,7 +8,7 @@ import { Wordmark } from "@/components/wordmark";
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
-  if (await getSessionUser()) redirect("/dashboard");
+  if (await getSessionUser()) redirect(routes.home);
   // Nothing set up yet: send the first visitor to create the organisation.
   if (!(await hasAnyOrganisation())) redirect(routes.setup);
 

@@ -390,8 +390,20 @@ function Legend() {
     "REQUIRES_REVALIDATION", "SUSPENDED", "NOT_TRAINED",
   ];
   return (
-    <div className="card card-pad">
-      <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
+    /*
+      A disclosure, not a permanent block. Eleven definitions sat open under
+      every matrix, taking more height than the grid on a phone — and after
+      the first look nobody reads them again. The glyphs stay on the cells;
+      this is here for the day someone needs reminding.
+    */
+    <details className="card card-pad group">
+      <summary className="flex items-center gap-2 cursor-pointer list-none text-[13px] text-[var(--ink-soft)] hover:text-[var(--ink)]">
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden className="shrink-0 transition-transform group-open:rotate-90">
+          <path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        What the colours and levels mean
+      </summary>
+      <div className="mt-4 flex flex-wrap items-start gap-x-6 gap-y-3">
         <div>
           <p className="label mb-2">Status</p>
           <ul className="flex flex-wrap gap-x-4 gap-y-2">
@@ -424,6 +436,6 @@ function Legend() {
         A cell with an amber underline expires within 60 days. The bottom row counts competent operators per machine —
         anything at 1 or 0 is a single point of failure.
       </p>
-    </div>
+    </details>
   );
 }

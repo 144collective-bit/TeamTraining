@@ -29,7 +29,7 @@ async function signIn(email) {
   }
   await p.fill('#email', email);
   await p.fill('#password', 'demo-password-1');
-  await Promise.all([p.waitForURL('**/dashboard', { timeout: 15000 }), p.click('button[type=submit]')]);
+  await Promise.all([p.waitForURL('**/home', { timeout: 15000 }), p.click('button[type=submit]')]);
 }
 
 const step = async (name, fn) => {

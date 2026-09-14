@@ -32,7 +32,7 @@ const step = async (name, fn) => {
 await p.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
 await p.fill('#email', 'k.bhatti@northgate.example');
 await p.fill('#password', 'demo-password-1');
-await Promise.all([p.waitForURL('**/dashboard'), p.click('button[type=submit]')]);
+await Promise.all([p.waitForURL('**/home'), p.click('button[type=submit]')]);
 
 // ---------------------------------------------------------------- 1
 await step('start training from an empty matrix cell', async () => {

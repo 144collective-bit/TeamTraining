@@ -277,6 +277,184 @@ export async function getDashboard(tenantId: string) {
   });
 }
 
+/**
+ * Everything the three-door home page shows, in one round trip.
+ *
+ * Deliberately one statement: each asTenant call is a transaction — BEGIN, set
+ * the tenant, the query, COMMIT — so four calls is sixteen round trips, and
+ * this page is the first thing anyone loads.
+ */
+export async function getHome(tenantId: string) {
+  return asTenant(tenantId, async (tx) => {
+    const rows = await tx.execute(sql`
+      select
+        -- Induction
+        (select count(*) from users u
+           where u.tenant_id = ${tenantId} and u.status = 'ACTIVE')                    as people,
+        (select count(*) from inductions i join users u on u.id = i.user_id
+           where i.tenant_id = ${tenantId} and u.status = 'ACTIVE'
+             and i.completed_at is not null)                                           as inducted,
+        (select count(*) from inductions i join users u on u.id = i.user_id
+           where i.tenant_id = ${tenantId} and u.status = 'ACTIVE'
+             and i.completed_at is null)                                               as inducting,
+
+        -- Training
+        (select count(*) from competence_records c
+           where c.tenant_id = ${tenantId} and c.status = 'COMPETENT')                 as competent,
+        (select count(*) from competence_records c
+           where c.tenant_id = ${tenantId}
+             and c.status in ('IN_TRAINING','ASSESSMENT'))                             as in_training,
+        (select count(*) from competence_records c
+           where c.tenant_id = ${tenantId}
+             and c.status in ('REQUIRES_REVALIDATION','SUSPENDED'))                    as needs_action,
+        (select count(*) from competence_records c
+           where c.tenant_id = ${tenantId} and c.status = 'NOT_TRAINED')               as not_trained,
+        (select count(*) from machines m
+           where m.tenant_id = ${tenantId} and m.active = true)                        as machines,
+        (select count(*) from machines m
+           where m.tenant_id = ${tenantId} and m.active = true
+             and (select count(*) from competence_records c
+                    where c.machine_id = m.id and c.status = 'COMPETENT') >= 2)        as machines_covered,
+
+        -- Continuous improvement
+        (select count(*) from machines m
+           where m.tenant_id = ${tenantId} and m.active = true
+             and (select count(*) from competence_records c
+                    where c.machine_id = m.id and c.status = 'COMPETENT') <= 1)        as single_points,
+        (select count(*) from machines m
+           where m.tenant_id = ${tenantId} and m.active = true
+             and (select count(*) from competence_records c
+                    where c.machine_id = m.id and c.status = 'COMPETENT') >= 2
+             and (select count(*) from competence_records c
+                    where c.machine_id = m.id and c.status = 'COMPETENT'
+                      and c.level = 'TRAINER') = 0)                                    as no_trainer,
+        (select count(*) from documents d
+           where d.tenant_id = ${tenantId} and d.archived = false
+             and exists (select 1 from document_revisions r
+                           where r.document_id = d.id and r.status = 'PUBLISHED'
+                             and r.next_review_on is not null
+                             and r.next_review_on < current_date))                     as documents_due,
+        (select count(*) from competence_records c
+           where c.tenant_id = ${tenantId}
+             and c.ack_required_revision_id is not null)                               as pending_ack,
+        (select count(*) from competence_records c
+           where c.tenant_id = ${tenantId} and c.next_review_due is not null
+             and c.next_review_due < current_date)                                     as reviews_due,
+        (select count(*) from competence_records c
+           where c.tenant_id = ${tenantId} and c.status = 'COMPETENT'
+             and c.expires_on is not null
+             and c.expires_on < current_date + interval '60 days')                     as expiring_soon
+    `);
+
+    // count() is bigint, which the driver hands back as a string.
+    const r = (rows as unknown as Array<Record<string, unknown>>)[0] ?? {};
+    const n = (key: string) => Number(r[key] ?? 0);
+
+    const people = n("people");
+    const inducted = n("inducted");
+    const inducting = n("inducting");
+
+    return {
+      induction: {
+        people,
+        inducted,
+        inducting,
+        notStarted: Math.max(0, people - inducted - inducting),
+      },
+      training: {
+        notTrained: n("not_trained"),
+        competent: n("competent"),
+        inTraining: n("in_training"),
+        needsAction: n("needs_action"),
+        machines: n("machines"),
+        machinesCovered: n("machines_covered"),
+      },
+      improve: {
+        singlePoints: n("single_points"),
+        noTrainer: n("no_trainer"),
+        documentsDue: n("documents_due"),
+        pendingAck: n("pending_ack"),
+        reviewsDue: n("reviews_due"),
+        expiringSoon: n("expiring_soon"),
+      },
+    };
+  });
+}
+
+/** Everyone active, and where their site induction has got to. */
+export async function getInductionOverview(tenantId: string) {
+  return asTenant(tenantId, async (tx) => {
+    const rows = await tx.execute(sql`
+      select
+        u.id,
+        u.name,
+        u.employee_ref,
+        u.job_title,
+        i.id                as induction_id,
+        i.started_at,
+        i.completed_at,
+        (select name from users t where t.id = i.trainer_id)                      as trainer_name,
+        (select count(*) from induction_items it where it.induction_id = i.id)    as items,
+        (select count(*) from induction_items it
+           where it.induction_id = i.id and it.completed_at is not null)          as items_done
+      from users u
+      left join lateral (
+        select * from inductions x
+         where x.user_id = u.id and x.tenant_id = ${tenantId}
+         order by x.started_at desc limit 1
+      ) i on true
+      where u.tenant_id = ${tenantId} and u.status = 'ACTIVE'
+      order by
+        case when i.id is null then 0 when i.completed_at is null then 1 else 2 end,
+        u.name
+    `);
+
+    return (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
+      userId: String(r.id),
+      name: String(r.name),
+      employeeRef: r.employee_ref as string | null,
+      jobTitle: r.job_title as string | null,
+      startedAt: r.started_at as string | null,
+      completedAt: r.completed_at as string | null,
+      trainerName: r.trainer_name as string | null,
+      items: Number(r.items ?? 0),
+      itemsDone: Number(r.items_done ?? 0),
+      state: (r.induction_id == null
+        ? "NOT_STARTED"
+        : r.completed_at == null
+          ? "IN_PROGRESS"
+          : "COMPLETE") as "NOT_STARTED" | "IN_PROGRESS" | "COMPLETE",
+    }));
+  });
+}
+
+/** Published procedures whose review date has passed. */
+export async function getDocumentsDueReview(tenantId: string) {
+  return asTenant(tenantId, async (tx) => {
+    const rows = await tx.execute(sql`
+      select d.id, d.reference, d.title, d.kind,
+             r.revision, r.next_review_on
+        from documents d
+        join document_revisions r
+          on r.document_id = d.id and r.status = 'PUBLISHED'
+       where d.tenant_id = ${tenantId}
+         and d.archived = false
+         and r.next_review_on is not null
+         and r.next_review_on < current_date
+       order by r.next_review_on asc
+    `);
+
+    return (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
+      id: String(r.id),
+      reference: String(r.reference),
+      title: String(r.title),
+      kind: String(r.kind),
+      revision: Number(r.revision ?? 0),
+      nextReviewOn: r.next_review_on as string | null,
+    }));
+  });
+}
+
 export type ActionReason =
   | "SUSPENDED" | "REVALIDATION" | "EXPIRING" | "REVIEW_OVERDUE" | "ACKNOWLEDGEMENT";
 
